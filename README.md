@@ -138,23 +138,23 @@ src/acme.openapi.jsonc(12,91): error inspex4: Cannot resolve $ref "#/components/
 src/app.ts(10,14): error TS2322: Type 'string' is not assignable to type 'number'.
 ```
 
-| code       | problem                                                                                                               | types                                                                                       |
-| ---------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `inspex1`  | invalid JSONC (with the line and column)                                                                              | none: the module exports nothing                                                            |
-| `inspex2`  | not an OpenAPI 3.0 or 3.1 document (Swagger 2.0, another version), or a file name that is not `<name>.openapi.jsonc`  | none                                                                                        |
-| `inspex3`  | duplicate `operationId`                                                                                               | the first keeps the id; later ones are typed inline in `paths` and left out of `operations` |
-| `inspex4`  | a `$ref` that does not resolve                                                                                        | `unknown` there                                                                             |
-| `inspex5`  | a `$ref` to another file or a URL, to something that is not a schema in a schema, or to a component of the wrong kind | `unknown` there                                                                             |
-| `inspex6`  | a value of the wrong kind (a schema that is not an object, ...)                                                       | `unknown` there                                                                             |
-| `inspex7`  | two specs with the same name registered in one program                                                                | the second is not registered                                                                |
-| `inspex9`  | a malformed option (reported in `tsconfig.json`)                                                                      |                                                                                             |
-| `inspex10` | a `$ref` cycle with no object or array in between (`A` is `B`, `B` is `A`; or `C` is `C \| string`)                   | `unknown` for each component on the cycle                                                   |
+| code       | problem                                                                                                                                                            | types                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `inspex1`  | invalid JSONC (with the line and column)                                                                                                                           | none: the module exports nothing                                                            |
+| `inspex2`  | not an OpenAPI 3.0 or 3.1 document (Swagger 2.0, another version), or a file name that is not `<name>.openapi.jsonc`                                               | none                                                                                        |
+| `inspex3`  | duplicate `operationId`                                                                                                                                            | the first keeps the id; later ones are typed inline in `paths` and left out of `operations` |
+| `inspex4`  | a `$ref` that does not resolve                                                                                                                                     | `unknown` there                                                                             |
+| `inspex5`  | a `$ref` to another file or a URL, to something that is not a schema in a schema, or to a component of the wrong kind                                              | `unknown` there                                                                             |
+| `inspex6`  | a value of the wrong kind (a schema that is not an object, ...)                                                                                                    | `unknown` there                                                                             |
+| `inspex7`  | two specs with the same name registered in one program                                                                                                             | the second is not registered                                                                |
+| `inspex9`  | a malformed option (reported in `tsconfig.json`)                                                                                                                   |                                                                                             |
+| `inspex10` | a `$ref` cycle with no object or array in between (`A` is `B`, `B` is `A`; or `C` is `C \| string`), or a recursive schema reached by a `$ref` into another schema | `unknown` for each component on the cycle, or at that `$ref`                                |
 
 How: the mapper protocol's own diagnostics are treated as syntax errors, and TypeScript then hides every semantic error in the program. inspex reports problems as unused diagnostic directives of a generated companion file instead, which TypeScript reports alongside the program's other errors (verified on 7.1.0-beta and 7.1.0-dev.20261116.1).
 
 ## Cache
 
-Generated declarations are cached in `node_modules/.cache/inspex` next to `tsconfig.json`, keyed by a SHA-256 of the file's content, the mapper's own code and the options. Content, not size and modification time: the editor sends unsaved content, and a same-size edit within the file system's time resolution would otherwise be served stale. An entry is used only if it parses, carries its own key and matches its checksum, so a stale, foreign or damaged entry is regenerated. The cache protects against stale and damaged entries, not against someone who can write to it: they can rewrite the checksum too. Symbolic links are never followed: if the cache directory or an entry is one, the cache is not used. The directory is safe to delete; `node_modules` is usually git-ignored already.
+Generated declarations are cached in `node_modules/.cache/inspex` next to `tsconfig.json`, keyed by a SHA-256 of the file's content, the mapper's own code and the options. Content, not size and modification time: the editor sends unsaved content, and a same-size edit within the file system's time resolution would otherwise be served stale. An entry is used only if it parses, carries its own key and matches its checksum, so a stale, foreign or damaged entry is regenerated. The cache protects against stale and damaged entries, not against someone who can write to it: they can rewrite the checksum too. Symbolic links are never followed: if the cache directory or an entry is one, the cache is not used. The cache can never fail or change a transform: an entry that cannot be read, checked or parsed is regenerated, and a write that fails is ignored. The directory is safe to delete; `node_modules` is usually git-ignored already.
 
 ## Where the mapper does not run
 
@@ -185,6 +185,8 @@ The types equal openapi-typescript 7's default output, except where that output 
 - A `$ref` cycle with no object or array in between is `unknown` and an error; openapi-typescript rejects the document.
 - operationIds are kept as they are; openapi-typescript replaces `#` with `/`, so `a#b` and `a/b` become one key declared twice.
 - A `$ref` percent-encoded in the URI fragment (`#/components/schemas/A%7E1B` for `A/B`) is decoded before `~1` and `~0` (RFC 6901); openapi-typescript cannot resolve it.
+- `required` beside an `allOf` `$ref` makes a property required only when the type emitted for the target has it; openapi-typescript also does so when that type is nullable, a union without the property or a literal, and emits `WithRequired<T, "x">` that does not compile.
+- A schema with its own shape beside an `allOf` (or `anyOf`, `oneOf`) `$ref` back to itself is typed by that shape (`A = { x } & A` is `{ x }`); openapi-typescript's self-intersection does not compile.
 - Names that are also `Object.prototype` members (`__proto__`, `constructor`) are ordinary names: a discriminator named `__proto__` is kept, and `required: ["constructor"]` does not invent a property.
 - A broken part of a spec (a `$ref` that does not resolve, a duplicate operationId) is `unknown` or left out, with an error; openapi-typescript rejects the whole document.
 
@@ -192,21 +194,22 @@ The types equal openapi-typescript 7's default output, except where that output 
 
 What the generator types, and how:
 
-| keyword or case                                                                                          | type                                                                                              |
-| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `type` (also the 3.1 array form), `enum`, `const`, 3.0 `nullable`                                        | as openapi-typescript; `{ "const": null }` is `unknown`, as openapi-typescript                    |
-| `properties`, `required`, `additionalProperties`, `patternProperties`                                    | as openapi-typescript (no `additionalProperties`: a closed object)                                |
-| `items`, `prefixItems` (and 3.0 array `items`)                                                           | arrays and tuples, as openapi-typescript                                                          |
-| `allOf`, `oneOf`, `anyOf`, `discriminator` (with and without `mapping`)                                  | as openapi-typescript                                                                             |
-| `not`, `if`/`then`/`else`, `dependentSchemas`, `unevaluatedProperties`, `minItems` and other constraints | ignored, as openapi-typescript does                                                               |
-| `format`                                                                                                 | no effect on the type; `format: binary` is `string`, as openapi-typescript (not `Blob` or `File`) |
-| `readOnly` / `writeOnly`                                                                                 | without `readWriteMarkers`, a required `readOnly` property is required in request bodies too      |
-| `default`                                                                                                | makes a property required outside parameters and request bodies, as openapi-typescript            |
-| `description`, `title`, `summary`, `deprecated`, `format`, `default`                                     | JSDoc (examples are left out)                                                                     |
-| a 3.1 `$ref` with sibling keywords (`required`, `properties`, ...)                                       | the referenced type; the siblings are ignored, as openapi-typescript does                         |
-| `$ref` to another file or URL                                                                            | `unknown` and an error                                                                            |
-| webhooks                                                                                                 | their operations are in `operations`; `webhooks` itself is not exported                           |
-| YAML specs, OpenAPI 3.2, Swagger 2.0                                                                     | not supported                                                                                     |
+| keyword or case                                                                                                                 | type                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `type` (also the 3.1 array form), `enum`, `const`, 3.0 `nullable`                                                               | as openapi-typescript; `{ "const": null }` is `unknown`, as openapi-typescript                                |
+| `properties`, `required`, `additionalProperties`, `patternProperties`                                                           | as openapi-typescript (no `additionalProperties`: a closed object)                                            |
+| `items`, `prefixItems` (and 3.0 array `items`)                                                                                  | arrays and tuples, as openapi-typescript                                                                      |
+| `allOf`, `oneOf`, `anyOf`, `discriminator` (with and without `mapping`)                                                         | as openapi-typescript                                                                                         |
+| `not`, `if`/`then`/`else`, `dependentSchemas`, `unevaluatedProperties`, `minItems` and other constraints                        | ignored, as openapi-typescript does                                                                           |
+| `format`                                                                                                                        | no effect on the type; `format: binary` is `string`, as openapi-typescript (not `Blob` or `File`)             |
+| `readOnly` / `writeOnly`                                                                                                        | without `readWriteMarkers`, a required `readOnly` property is required in request bodies too                  |
+| `default`                                                                                                                       | makes a property required outside parameters and request bodies, as openapi-typescript                        |
+| `description`, `title`, `summary`, `deprecated`, `format`, `default`                                                            | JSDoc (examples are left out)                                                                                 |
+| a 3.1 `$ref` with sibling keywords (`required`, `properties`, ...)                                                              | the referenced type; the siblings are ignored, as openapi-typescript does                                     |
+| `$ref` to another file or URL                                                                                                   | `unknown` and an error                                                                                        |
+| a recursive schema reached by a `$ref` into another schema (`#/components/schemas/A/$defs/Node`, where `Node` refers to itself) | `unknown` and an error (`inspex10`): inspex cannot name it; move it to `components.schemas` to give it a type |
+| webhooks                                                                                                                        | their operations are in `operations`; `webhooks` itself is not exported                                       |
+| YAML specs, OpenAPI 3.2, Swagger 2.0                                                                                            | not supported                                                                                                 |
 
 The types match openapi-typescript 7.13 (with `emptyObjectsUnknown: true`, with and without `readWriteMarkers`) on this repository's fixtures, the Stripe spec (612 operations) and the Cloudflare spec (3,778 operations), compared by the TypeScript compiler, apart from the differences above: on Stripe none applies; on Cloudflare, 4 schemas get a recursion alias and 1,410 objects without properties are `Record<string, unknown>`. inspex's declarations for all of them compile without errors.
 
@@ -223,8 +226,8 @@ Not tested:
 | spec                                 | cold   | warm   | same declarations as a `.d.ts` on disk | peak memory, cold / warm (process tree) | mapper process peak | declarations |
 | ------------------------------------ | ------ | ------ | -------------------------------------- | --------------------------------------- | ------------------- | ------------ |
 | small (7 operations, 3 KB)           | 0.14 s | 0.14 s | 0.10 s                                 | 61 / 61 MB                              | 62 MB               | 3.5 KB       |
-| Stripe (612 operations, 8.3 MB)      | 0.53 s | 0.32 s | 0.14 s                                 | 217 / 147 MB                            | 201 MB              | 3.3 MB       |
-| Cloudflare (3,778 operations, 28 MB) | 1.52 s | 0.81 s | 0.32 s                                 | 487 / 352 MB                            | 448 MB              | 9.6 MB       |
+| Stripe (612 operations, 8.3 MB)      | 0.53 s | 0.32 s | 0.14 s                                 | 224 / 147 MB                            | 201 MB              | 3.3 MB       |
+| Cloudflare (3,778 operations, 28 MB) | 1.52 s | 0.79 s | 0.32 s                                 | 509 / 351 MB                            | 448 MB              | 9.6 MB       |
 
 The compiler sends the whole spec to the mapper on every run, so a warm run still costs more than a `.d.ts` on disk.
 
