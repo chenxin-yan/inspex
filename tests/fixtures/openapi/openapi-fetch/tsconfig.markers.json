@@ -1,0 +1,5 @@
+{
+	"extends": "../tsconfig.base.json",
+	"include": ["src/acme.openapi.jsonc", "src/markers.ts"],
+	"contentMappers": [{ "package": "inspex", "extensions": [".openapi.jsonc"], "options": { "readWriteMarkers": true } }]
+}

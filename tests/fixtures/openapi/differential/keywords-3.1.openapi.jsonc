@@ -1,0 +1,104 @@
+// Schema keywords, OpenAPI 3.1. Compared with openapi-typescript by tests/differential.test.ts.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "keywords 3.1", "version": "1" },
+	"paths": {
+		"/schemas": {
+			"post": {
+				"operationId": "allKeywords",
+				"requestBody": {
+					"required": true,
+					"content": { "application/json": { "schema": { "$ref": "#/components/schemas/Everything" } } }
+				},
+				"responses": {
+					"200": {
+						"description": "ok",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/Everything" } } }
+					}
+				}
+			}
+		}
+	},
+	"webhooks": {
+		"userCreated": {
+			"post": {
+				"operationId": "onUserCreated",
+				"requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } },
+				"responses": { "204": { "description": "ack" } }
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"Everything": {
+				"type": "object",
+				"required": ["str", "int", "union", "constant", "tuple", "nested-name"],
+				"properties": {
+					"str": { "type": "string", "description": "A string.\nOn two lines, with a */ inside." },
+					"int": { "type": "integer", "format": "int64" },
+					"num": { "type": "number", "exclusiveMinimum": 0 },
+					"bool": { "type": "boolean", "deprecated": true },
+					"nul": { "type": "null" },
+					"union": { "type": ["string", "integer", "null"] },
+					"nullableRef": { "type": ["object", "null"], "properties": { "a": { "type": "string" } } },
+					"constant": { "const": "fixed" },
+					"constNumber": { "const": -1 },
+					"constObject": { "const": { "a": [1, true, null] } },
+					"enumString": { "type": "string", "enum": ["a", "b", "it's"] },
+					"enumMixed": { "enum": [1, "one", true, null] },
+					"enumNullable": { "type": ["string", "null"], "enum": ["x", null] },
+					"tuple": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "number" }] },
+					"list": { "type": "array", "items": { "$ref": "#/components/schemas/User" } },
+					"matrix": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } },
+					"anyList": { "type": "array" },
+					"unionList": { "type": "array", "items": { "anyOf": [{ "type": "string" }, { "type": "number" }] } },
+					"map": { "type": "object", "additionalProperties": { "type": "integer" } },
+					"openObject": { "type": "object", "properties": { "a": { "type": "string" } }, "additionalProperties": true },
+					"openEmpty": { "type": "object", "additionalProperties": {} },
+					"closedObject": { "type": "object", "properties": { "a": { "type": "string" } }, "additionalProperties": false },
+					"patterns": { "type": "object", "patternProperties": { "^x-": { "type": "string" }, "^n-": { "type": "number" } } },
+					"emptyObject": { "type": "object" },
+					"anything": {},
+					"trueSchema": true,
+					"falseSchema": false,
+					"notSchema": { "not": { "type": "string" } },
+					"allOf": { "allOf": [{ "$ref": "#/components/schemas/User" }, { "type": "object", "properties": { "extra": { "type": "string" } } }] },
+					"anyOf": { "anyOf": [{ "type": "string" }, { "$ref": "#/components/schemas/User" }] },
+					"oneOfPrimitive": { "oneOf": [{ "type": "string" }, { "type": "integer" }] },
+					"oneOfObjects": { "oneOf": [{ "$ref": "#/components/schemas/User" }, { "$ref": "#/components/schemas/Tree" }] },
+					"typeAndOneOf": { "type": "object", "properties": { "k": { "type": "string" } }, "oneOf": [{ "required": ["k"] }, { "properties": { "j": { "type": "number" } } }] },
+					"typeArrayAndOneOf": { "type": ["string", "number"], "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "number" }] },
+					"withDefault": { "type": "string", "default": "x" },
+					"dateTime": { "type": "string", "format": "date-time" },
+					"binary": { "type": "string", "format": "binary" },
+					"readOnlyId": { "type": "string", "readOnly": true },
+					"writeOnlySecret": { "type": "string", "writeOnly": true },
+					"nested-name": { "type": "object", "required": ["0", "with space"], "properties": { "0": { "type": "string" }, "with space": { "type": "string" }, "$dollar": { "type": "string" } } },
+					"refProperty": { "$ref": "#/components/schemas/User/properties/name" },
+					"tree": { "$ref": "#/components/schemas/Tree" },
+					"defs": { "type": "object", "$defs": { "Inner": { "type": "string" } } }
+				}
+			},
+			"User": {
+				"type": "object",
+				"required": ["id", "name"],
+				"properties": {
+					"id": { "type": "string", "readOnly": true },
+					"name": { "type": "string" },
+					"password": { "type": "string", "writeOnly": true },
+					"role": { "type": "string", "enum": ["admin", "member"], "default": "member" }
+				}
+			},
+			"Tree": {
+				"type": "object",
+				"required": ["value"],
+				"properties": {
+					"value": { "type": "string" },
+					"children": { "type": "array", "items": { "$ref": "#/components/schemas/Tree" } }
+				}
+			},
+			"Aliased": { "$ref": "#/components/schemas/User" },
+			"StringOrNull": { "type": ["string", "null"] }
+		}
+	}
+}

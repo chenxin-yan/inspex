@@ -1,0 +1,10 @@
+// Two operationIds that upstream merges into one key (it replaces "#" with "/"), emitting duplicate
+// members that do not compile. inspex keeps operationIds as they are.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "operationId collision", "version": "1" },
+	"paths": {
+		"/a": { "get": { "operationId": "a#b", "responses": { "200": { "description": "ok", "content": { "text/plain": { "schema": { "type": "string" } } } } } } },
+		"/b": { "get": { "operationId": "a/b", "responses": { "200": { "description": "ok", "content": { "text/plain": { "schema": { "type": "number" } } } } } } }
+	}
+}

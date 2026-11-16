@@ -1,0 +1,15 @@
+// Component aliases whose target does not exist: `unknown` and a diagnostic for each (upstream rejects
+// the document).
+{
+	"openapi": "3.1.0",
+	"info": { "title": "missing component aliases", "version": "1" },
+	"paths": {},
+	"components": {
+		"parameters": { "Alias": { "$ref": "#/components/parameters/Missing" } },
+		"responses": { "Alias": { "$ref": "#/components/responses/Missing" } },
+		"headers": { "Alias": { "$ref": "#/components/headers/Missing" } },
+		"requestBodies": { "Alias": { "$ref": "#/components/requestBodies/Missing" } },
+		"pathItems": { "Alias": { "$ref": "#/components/pathItems/Missing" } },
+		"schemas": { "WrongKind": { "$ref": "#/components/parameters/Alias" } }
+	}
+}

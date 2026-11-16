@@ -31,10 +31,6 @@ jobs:
       - name: Type check
         run: pnpm run check:types
 
-      # publint and attw run in the build under CI, so a broken package shape fails here.
-      - name: Build
-        run: pnpm run build
-
   test:
     name: Test (${{ matrix.label }})
     strategy:

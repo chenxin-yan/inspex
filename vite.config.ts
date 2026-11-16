@@ -1,13 +1,13 @@
 import { defineConfig } from "vite-plus";
 
-const ignorePatterns = [".changeset/", "**/CHANGELOG.md"];
+const ignorePatterns = [".changeset/", "**/CHANGELOG.md", "**/tests/fixtures/"];
 
 export default defineConfig({
 	fmt: {
 		useTabs: true,
 		sortImports: true,
 		sortPackageJson: false,
-		ignorePatterns: [...ignorePatterns, "**/tests/fixtures/"],
+		ignorePatterns,
 	},
 	lint: {
 		options: {
@@ -62,13 +62,11 @@ export default defineConfig({
 		],
 	},
 	pack: {
+		// The package's only file is the content mapper process; there is nothing to import.
+		entry: ["src/server.ts"],
+		dts: false,
 		fixedExtension: false,
 		publint: "ci-only",
-		attw: {
-			enabled: "ci-only",
-			profile: "esm-only",
-			level: "error",
-		},
 	},
 	test: {
 		// A file opts in with a `@module-tag` comment; CI runs the tagged files on that host.

@@ -1,0 +1,51 @@
+// Discriminators with and without mapping, as openapi-typescript models them (OpenAPI 3.0).
+// Compared with openapi-typescript by tests/differential.test.ts.
+{
+	"openapi": "3.0.3",
+	"info": { "title": "discriminator", "version": "1" },
+	"paths": {
+		"/pets": {
+			"post": {
+				"operationId": "createPet",
+				"requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } } } },
+				"responses": {
+					"200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Shape" } } } }
+				}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"Pet": {
+				"oneOf": [{ "$ref": "#/components/schemas/Cat" }, { "$ref": "#/components/schemas/Dog" }],
+				"discriminator": { "propertyName": "kind", "mapping": { "cat": "#/components/schemas/Cat", "dog": "#/components/schemas/Dog" } }
+			},
+			"Cat": { "type": "object", "required": ["lives"], "properties": { "kind": { "type": "string" }, "lives": { "type": "integer" } } },
+			"Dog": { "type": "object", "properties": { "bark": { "type": "boolean" } } },
+			"Shape": {
+				"oneOf": [{ "$ref": "#/components/schemas/Circle" }, { "$ref": "#/components/schemas/Square" }],
+				"discriminator": { "propertyName": "shapeType" }
+			},
+			"Circle": { "type": "object", "properties": { "shapeType": { "type": "string" }, "radius": { "type": "number" } } },
+			"Square": {
+				"allOf": [{ "$ref": "#/components/schemas/ShapeBase" }, { "type": "object", "properties": { "side": { "type": "number" } } }]
+			},
+			"ShapeBase": {
+				"type": "object",
+				"required": ["shapeType"],
+				"properties": { "shapeType": { "type": "string" }, "id": { "type": "string" } },
+				"discriminator": {
+					"propertyName": "shapeType",
+					"mapping": { "tri": "#/components/schemas/Triangle", "square": "#/components/schemas/Square" }
+				}
+			},
+			"Triangle": {
+				"allOf": [{ "$ref": "#/components/schemas/ShapeBase" }, { "type": "object", "properties": { "corners": { "type": "integer" } } }]
+			},
+			"Hexagon": {
+				"description": "Extends the base without a mapping entry: its name is the discriminator value.",
+				"allOf": [{ "$ref": "#/components/schemas/ShapeBase" }]
+			}
+		}
+	}
+}

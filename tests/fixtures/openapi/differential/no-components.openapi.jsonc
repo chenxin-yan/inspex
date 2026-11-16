@@ -1,0 +1,6 @@
+// No `components` at all: the six component groups are still there, each `never`, as upstream emits.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "no components", "version": "1" },
+	"paths": { "/a": { "get": { "operationId": "getA", "responses": { "204": { "description": "ok" } } } } }
+}

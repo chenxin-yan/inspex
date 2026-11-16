@@ -1,0 +1,43 @@
+// Components that are only a $ref to another component of the same kind. Upstream mistypes these
+// (tests/differential.test.ts states how); inspex gives them their target's type.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "component aliases", "version": "1" },
+	"paths": {
+		"/p": { "$ref": "#/components/pathItems/Alias" },
+		"/q": {
+			"get": {
+				"operationId": "getQ",
+				"parameters": [{ "$ref": "#/components/parameters/Alias" }],
+				"requestBody": { "$ref": "#/components/requestBodies/Alias" },
+				"responses": { "200": { "$ref": "#/components/responses/Alias" } }
+			}
+		}
+	},
+	"components": {
+		"parameters": {
+			"P": { "name": "q", "in": "query", "required": true, "schema": { "type": "integer" } },
+			"Alias": { "$ref": "#/components/parameters/P" }
+		},
+		"responses": {
+			"R": {
+				"description": "ok",
+				"headers": { "X-Count": { "$ref": "#/components/headers/Alias" } },
+				"content": { "text/plain": { "schema": { "type": "string" } } }
+			},
+			"Alias": { "$ref": "#/components/responses/R" }
+		},
+		"headers": {
+			"H": { "schema": { "type": "integer" } },
+			"Alias": { "$ref": "#/components/headers/H" }
+		},
+		"requestBodies": {
+			"B": { "required": true, "content": { "text/plain": { "schema": { "type": "string" } } } },
+			"Alias": { "$ref": "#/components/requestBodies/B" }
+		},
+		"pathItems": {
+			"P": { "get": { "operationId": "getP", "responses": { "204": { "description": "ok" } } } },
+			"Alias": { "$ref": "#/components/pathItems/P" }
+		}
+	}
+}

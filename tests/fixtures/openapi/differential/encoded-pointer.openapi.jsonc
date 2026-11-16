@@ -1,0 +1,13 @@
+// JSON Pointers in a URI fragment are percent-decoded before "~1" and "~0" are unescaped (RFC 6901 §6).
+{
+	"openapi": "3.1.0",
+	"info": { "title": "encoded pointer", "version": "1" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"A/B": { "type": "string" },
+			"Escaped": { "$ref": "#/components/schemas/A~1B" },
+			"PercentEncoded": { "$ref": "#/components/schemas/A%7E1B" }
+		}
+	}
+}

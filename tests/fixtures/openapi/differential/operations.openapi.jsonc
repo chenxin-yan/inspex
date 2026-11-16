@@ -1,0 +1,120 @@
+// Paths, operations, parameters, bodies, responses and components other than schemas (OpenAPI 3.1).
+// Compared with openapi-typescript by tests/differential.test.ts.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "operations", "version": "1" },
+	"paths": {
+		"/users/{id}": {
+			"summary": "One user",
+			"parameters": [
+				{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+				{ "name": "trace", "in": "header", "schema": { "type": "boolean" } },
+				{ "$ref": "#/components/parameters/Limit" }
+			],
+			"get": {
+				"operationId": "getUser",
+				"summary": "Get a user",
+				"parameters": [
+					{ "name": "expand", "in": "query", "schema": { "type": "boolean" } },
+					// Replaces the path-item level parameter of the same name and location.
+					{ "name": "trace", "in": "header", "required": true, "schema": { "type": "string" } },
+					{ "name": "session", "in": "cookie", "schema": { "type": "string" } },
+					{ "name": "filter", "in": "query", "content": { "application/json": { "schema": { "type": "object" } } } }
+				],
+				"responses": {
+					"200": {
+						"description": "ok",
+						"headers": {
+							"X-Rate-Limit": { "required": true, "schema": { "type": "integer" } },
+							"X-Note": { "description": "optional", "schema": { "type": "string" } },
+							"X-Shared": { "$ref": "#/components/headers/Shared" }
+						},
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/User" } },
+							"text/plain": { "schema": { "type": "string" } }
+						}
+					},
+					"404": { "$ref": "#/components/responses/NotFound" },
+					"default": { "description": "error", "content": { "application/problem+json": {} } }
+				}
+			},
+			"put": {
+				"operationId": "replaceUser",
+				"requestBody": { "$ref": "#/components/requestBodies/UserBody" },
+				"responses": { "204": { "description": "replaced" }, "4XX": { "description": "client error" } }
+			},
+			"patch": {
+				"operationId": "updateUser",
+				"requestBody": {
+					"content": {
+						"application/json": { "schema": { "$ref": "#/components/schemas/User" } },
+						"application/x-www-form-urlencoded": {
+							"schema": { "type": "object", "properties": { "name": { "type": "string" } } }
+						}
+					}
+				},
+				"responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } } }
+			},
+			"delete": {
+				"summary": "No operationId: typed inline in paths",
+				"requestBody": { "required": true, "content": {} },
+				"responses": { "204": { "description": "deleted" } }
+			}
+		},
+		"/upload": {
+			"post": {
+				"operationId": "upload",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"multipart/form-data": {
+							"schema": { "type": "object", "properties": { "file": { "type": "string", "format": "binary" } } }
+						},
+						"application/octet-stream": {}
+					}
+				},
+				"responses": {}
+			}
+		},
+		"/legacy": { "$ref": "#/components/pathItems/Legacy" },
+		"/ping#hash": {
+			"head": { "operationId": "ping.head", "responses": { "200": { "description": "ok" } } },
+			"options": { "operationId": "1-starts-with-digit", "responses": { "200": { "description": "ok" } } },
+			"trace": { "operationId": "with space", "responses": { "200": { "description": "ok" } } }
+		}
+	},
+	"components": {
+		"schemas": {
+			"User": {
+				"type": "object",
+				"required": ["id"],
+				"properties": { "id": { "type": "string" }, "name": { "type": "string" } }
+			}
+		},
+		"parameters": {
+			"Limit": { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+		},
+		"requestBodies": {
+			"UserBody": {
+				"required": true,
+				"content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+			}
+		},
+		"responses": {
+			"NotFound": {
+				"description": "missing",
+				"headers": { "X-Request-Id": { "schema": { "type": "string" } } },
+				"content": { "application/json": { "schema": { "type": "object", "properties": { "message": { "type": "string" } } } } }
+			}
+		},
+		"headers": {
+			"Shared": { "schema": { "type": "string", "enum": ["a", "b"] } },
+			"WithContent": { "content": { "text/plain": { "schema": { "type": "string" } } } }
+		},
+		"pathItems": {
+			"Legacy": {
+				"get": { "operationId": "legacyGet", "responses": { "200": { "description": "ok" } } }
+			}
+		}
+	}
+}

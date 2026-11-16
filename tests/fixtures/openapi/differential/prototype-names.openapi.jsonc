@@ -1,0 +1,45 @@
+// Names that are also Object.prototype members, everywhere a spec-provided name becomes a key.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "prototype names", "version": "1" },
+	"paths": {
+		"/__proto__": {
+			"get": {
+				"operationId": "__proto__",
+				"parameters": [
+					{ "name": "__proto__", "in": "query", "required": true, "schema": { "type": "string" } },
+					{ "name": "constructor", "in": "header", "schema": { "type": "integer" } },
+					{ "name": "toString", "in": "cookie", "schema": { "type": "boolean" } }
+				],
+				"responses": {
+					"200": {
+						"description": "ok",
+						"headers": {
+							"__proto__": { "required": true, "schema": { "type": "string" } },
+							"constructor": { "schema": { "type": "integer" } },
+							"toString": { "schema": { "type": "boolean" } }
+						},
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/__proto__" } } }
+					}
+				}
+			},
+			"put": { "operationId": "constructor", "responses": { "204": { "description": "ok" } } },
+			"post": { "operationId": "toString", "responses": { "204": { "description": "ok" } } }
+		}
+	},
+	"components": {
+		"schemas": {
+			"__proto__": {
+				"type": "object",
+				"required": ["__proto__", "constructor", "toString"],
+				"properties": {
+					"__proto__": { "type": "string" },
+					"constructor": { "$ref": "#/components/schemas/constructor" },
+					"toString": { "$ref": "#/components/schemas/toString" }
+				}
+			},
+			"constructor": { "type": "integer" },
+			"toString": { "type": "boolean" }
+		}
+	}
+}

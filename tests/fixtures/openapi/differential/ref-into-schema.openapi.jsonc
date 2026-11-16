@@ -1,0 +1,22 @@
+// $refs that point inside a schema. Upstream emits indexed accesses that do not compile; inspex inlines
+// the schema the pointer reaches, or reports a pointer that reaches no schema.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "refs into schemas", "version": "1" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"A": {
+				"type": "object",
+				"required": ["list"],
+				"properties": {
+					"nested": { "type": "object", "properties": { "id": { "type": "string" } } },
+					"list": { "type": "array", "items": { "type": "integer" } }
+				}
+			},
+			"Id": { "$ref": "#/components/schemas/A/properties/nested/properties/id" },
+			"Item": { "$ref": "#/components/schemas/A/properties/list/items" },
+			"NotASchema": { "$ref": "#/components/schemas/A/required" }
+		}
+	}
+}
