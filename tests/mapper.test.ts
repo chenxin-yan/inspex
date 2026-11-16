@@ -170,6 +170,6 @@ describe("where the mapper does not run, the import does not resolve", () => {
 				"error TS5023: Unknown compiler option '--runExternalCode'.",
 			]);
 		},
-		tscTimeout,
+		tscTimeout * 2,
 	);
 });

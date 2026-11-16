@@ -217,6 +217,7 @@ function report(ctx: Context, location: Location, code: ProblemCode, message: st
 	ctx.problems.push({ pointer, code, message: `${message} (at ${formatPointer(pointer)})` });
 }
 
+/** Like upstream, patches discriminator properties into `doc` in place: pass a fresh parse. */
 export function generateOpenApiTypes(doc: unknown, options: GenerateOptions = {}): GenerateResult {
 	const problems: Problem[] = [];
 	const fatal = (pointer: string[], message: string): GenerateResult => ({
