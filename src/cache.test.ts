@@ -72,38 +72,35 @@ it("checks the stored text itself, so even an equivalent re-serialization is a m
 	expect(readCache(directory, "spaced")).toBeUndefined();
 });
 
+/** An entry in the stored format: a header line with the key and the payload's checksum, then the payload. */
+function entryText(key: string, payload: string): string {
+	const checksum = createHash("sha256").update(payload).digest("hex");
+	return `${JSON.stringify({ key, checksum })}\n${payload}`;
+}
+
 it("treats a deeply nested payload as a miss, whatever its checksum", () => {
-	const deep = `${"[".repeat(20_000)}${"]".repeat(20_000)}`;
-	writeCache(directory, "deep", { text: "export {};\n", problems: [] });
-	const file = join(directory, "deep.json");
-	const [header] = readFileSync(file, "utf8").split("\n");
-	const entry = JSON.parse(header as string);
-	writeFileSync(
-		file,
-		`${JSON.stringify({ ...entry, checksum: "wrong" })}\n{"text":null,"problems":${deep}}`,
-	);
+	const payload = `{"text":null,"problems":${"[".repeat(20_000)}${"]".repeat(20_000)}}`;
+	writeFileSync(join(directory, "deep.json"), `{"key":"deep","checksum":"wrong"}\n${payload}`);
 	expect(readCache(directory, "deep")).toBeUndefined();
-	const sha = createHash("sha256");
-	const payload = `{"text":null,"problems":${deep}}`;
-	writeFileSync(
-		file,
-		`${JSON.stringify({ ...entry, checksum: sha.update(payload).digest("hex") })}\n${payload}`,
-	);
+	writeFileSync(join(directory, "deep.json"), entryText("deep", payload));
 	expect(readCache(directory, "deep")).toBeUndefined();
 });
 
 it.each([
 	["missing", undefined],
 	["corrupt", "{ not json"],
-	["another key", JSON.stringify({ key: "other", text: "", problems: [] })],
-	["a wrong shape", JSON.stringify({ key: "a wrong shape", text: 1, problems: [] })],
-	[
-		"a wrong problem",
-		JSON.stringify({ key: "a wrong problem", text: "", problems: [{ start: "0" }] }),
-	],
+	// Each of these is a valid entry but for one thing, so only that check turns it away.
+	["another key", entryText("other", '{"text":"","problems":[]}')],
+	["a wrong shape", entryText("a wrong shape", '{"text":1,"problems":[]}')],
+	["a wrong problem", entryText("a wrong problem", '{"text":"","problems":[{"start":"0"}]}')],
 ])("ignores an entry that is %s", (name, content) => {
 	if (content !== undefined) writeFileSync(join(directory, `${name}.json`), content);
 	expect(readCache(directory, name)).toBeUndefined();
+});
+
+it("reads an entry written in the stored format", () => {
+	writeFileSync(join(directory, "valid.json"), entryText("valid", '{"text":"","problems":[]}'));
+	expect(readCache(directory, "valid")).toEqual({ text: "", problems: [] });
 });
 
 /** Creates a symbolic link, or reports that this host does not allow it (Windows without the privilege). */
