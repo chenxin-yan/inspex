@@ -5,6 +5,10 @@
 - Unit tests are co-located (`src/foo.test.ts` beside `src/foo.ts`); integration tests go in `tests/`.
 - CI runs every test on Linux, and on macOS and Windows the files tagged for them with a `@module-tag macos` / `@module-tag windows` comment. A mapper runs inside the compiler on every host, so tag tests that touch paths, processes or the file system.
 
+## Docs
+
+`README.md` is the npm landing page (what it is, install, setup, options, examples, short limits); reference material (diagnostics, differences, keyword table, cost) goes in `docs/reference.md`, linked by absolute GitHub URL.
+
 ## Gates
 
 `pnpm run check && pnpm run check:types && pnpm run test && pnpm run build`
