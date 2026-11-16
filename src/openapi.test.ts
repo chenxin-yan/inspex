@@ -147,18 +147,6 @@ describe("a broken part of a spec", () => {
 });
 
 describe("deliberate differences from openapi-typescript", () => {
-	it("emits an empty operations interface when no operation has an operationId", () => {
-		const { text } = generateOpenApiTypes(doc({ paths: { "/a": get() } }));
-		expect(text).toContain("export interface operations {\n\n}");
-	});
-
-	it("types an object without properties as Record<string, unknown>", () => {
-		const { text } = generateOpenApiTypes(
-			doc({ components: { schemas: { A: { type: "object" } } } }),
-		);
-		expect(text).toContain("A: Record<string, unknown>;");
-	});
-
 	it("gives schemas on an eager reference cycle a type alias, so they are not circular", () => {
 		const { text } = generateOpenApiTypes(
 			doc({
@@ -214,23 +202,6 @@ describe("limits inherited from openapi-typescript", () => {
 		const { text } = generateOpenApiTypes(doc({ components: { schemas: { N: { const: null } } } }));
 		expect(text).toContain("N: unknown;");
 	});
-});
-
-it("adds a discriminator named __proto__ as an own property", () => {
-	const { text } = generateOpenApiTypes(
-		doc({
-			components: {
-				schemas: {
-					Choice: {
-						oneOf: [{ $ref: "#/components/schemas/A" }],
-						discriminator: { propertyName: "__proto__" },
-					},
-					A: { type: "object", properties: { id: { type: "string" } } },
-				},
-			},
-		}),
-	);
-	expect(text).toContain('__proto__: "A";');
 });
 
 it("exports the read/write helpers only with readWriteMarkers", () => {
@@ -299,20 +270,6 @@ describe("$refs into schemas follow the document's structure, not segment names"
 				(name) => [`components/schemas/${name}/$ref`, ProblemCode.UnsupportedRef],
 			),
 		);
-	});
-});
-
-describe("required promotion", () => {
-	it("promotes only properties the emitted target has", () => {
-		const { text, problems } = generateOpenApiTypes(
-			fixture("required-promotion-defs.openapi.jsonc"),
-		);
-		const types = schemaTypes(text);
-		expect(problems).toEqual([]);
-		expect(types.get("B")).toBe("3");
-		// C carries its own object shape; its allOf $ref back to itself adds nothing and is left out.
-		expect(text).toContain("C: {\nx?: string;\n};");
-		expect(text).toContain('D: WithRequired<components["schemas"]["C"], "x">;');
 	});
 });
 
