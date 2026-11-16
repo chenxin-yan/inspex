@@ -1,0 +1,22 @@
+// `required` beside an allOf $ref promotes a property only when the type emitted for the target has it.
+// Upstream promotes by the target's `properties` alone, emitting `WithRequired<T, "x">` that does not compile
+// when T is nullable, a union without that key, a literal, or a self-intersection.
+{
+	"openapi": "3.0.3",
+	"info": { "title": "required promotion", "version": "1" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"Nullable": { "type": "object", "nullable": true, "properties": { "x": { "type": "string" } } },
+			"FromNullable": { "required": ["x"], "allOf": [{ "$ref": "#/components/schemas/Nullable" }] },
+			"Base": { "type": "object", "properties": { "x": { "type": "string" } } },
+			"Either": { "anyOf": [{ "$ref": "#/components/schemas/Base" }, { "type": "string" }], "properties": { "x": { "type": "string" } } },
+			"FromEither": { "required": ["x"], "allOf": [{ "$ref": "#/components/schemas/Either" }] },
+			"SelfAllOf": { "type": "object", "properties": { "x": { "type": "string" } }, "allOf": [{ "$ref": "#/components/schemas/SelfAllOf" }] },
+			"FromSelfAllOf": { "required": ["x"], "allOf": [{ "$ref": "#/components/schemas/SelfAllOf" }] },
+			"Defs": { "$defs": { "N": { "const": 3, "properties": { "x": { "type": "string" } } } } },
+			"FromConst": { "required": ["x"], "allOf": [{ "$ref": "#/components/schemas/Defs/$defs/N" }] },
+			"FromBase": { "required": ["x"], "allOf": [{ "$ref": "#/components/schemas/Base" }] }
+		}
+	}
+}

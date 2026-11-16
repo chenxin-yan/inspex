@@ -1,7 +1,11 @@
 // Type shapes are compared with openapi-typescript in tests/differential.test.ts; these tests cover what
 // the oracle cannot: problems, and the places where inspex deliberately differs.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vite-plus/test";
 
+import { parseJsonc } from "./jsonc.ts";
 import { generateOpenApiTypes, ProblemCode } from "./openapi.ts";
 
 const doc = (extra: Record<string, unknown>) => ({
@@ -243,4 +247,82 @@ it("exports the read/write helpers only with readWriteMarkers", () => {
 	expect(markers).toContain("id?: $Read<string>;");
 	expect(markers).toContain("export type Readable<T>");
 	expect(markers).toContain("export type Writable<T>");
+});
+
+function fixture(name: string): unknown {
+	const parsed = parseJsonc(
+		readFileSync(join(import.meta.dirname, "..", "tests", "fixtures", "generator", name), "utf8"),
+	);
+	if (!parsed.ok) throw new Error(parsed.error.message);
+	return parsed.value;
+}
+
+/** The type of each component schema, as emitted on its member line. */
+function schemaTypes(text: string | undefined): Map<string, string> {
+	const start = text?.indexOf("export interface components {") ?? -1;
+	const schemas = text?.slice(start, text.indexOf("\nresponses:", start)) ?? "";
+	return new Map(
+		[...schemas.matchAll(/^("?[\w$]+"?): ([^\n]*);$/gm)].map((m) => [
+			m[1] as string,
+			m[2] as string,
+		]),
+	);
+}
+
+describe("$refs into schemas follow the document's structure, not segment names", () => {
+	const { text, problems } = generateOpenApiTypes(fixture("schema-positions.openapi.jsonc"));
+	const types = schemaTypes(text);
+
+	it.each([
+		["RefSchemaItems", "string"],
+		["RefSchemaProperties", "number"],
+		["RefPropertiesItems", "boolean"],
+		["RefItemsSchema", "number"],
+		["RefResponse", "string"],
+		["RefParameter", "string"],
+		["RefParameterContent", "number"],
+		["RefHeader", "boolean"],
+		["RefRequestBody", "string"],
+		["RefPathItem", "number"],
+		["RefPathParameter", "string"],
+		["RefExample", "unknown"],
+		["RefParameterObject", "unknown"],
+		["RefParameterName", "unknown"],
+		["RefSchemaPropertiesMap", "unknown"],
+	])("%s is %s", (name, type) => {
+		expect(types.get(name)).toBe(type);
+	});
+
+	it("reports each $ref that does not reach a schema", () => {
+		expect(problems.map((p) => [p.pointer.join("/"), p.code])).toEqual(
+			["RefExample", "RefParameterObject", "RefParameterName", "RefSchemaPropertiesMap"].map(
+				(name) => [`components/schemas/${name}/$ref`, ProblemCode.UnsupportedRef],
+			),
+		);
+	});
+});
+
+describe("required promotion", () => {
+	it("promotes only properties the emitted target has", () => {
+		const { text, problems } = generateOpenApiTypes(
+			fixture("required-promotion-defs.openapi.jsonc"),
+		);
+		const types = schemaTypes(text);
+		expect(problems).toEqual([]);
+		expect(types.get("B")).toBe("3");
+		// C carries its own object shape; its allOf $ref back to itself adds nothing and is left out.
+		expect(text).toContain("C: {\nx?: string;\n};");
+		expect(text).toContain('D: WithRequired<components["schemas"]["C"], "x">;');
+	});
+});
+
+it("reports a recursive schema reached by a $ref into another schema as unknown, with an accurate message", () => {
+	const { text, problems } = generateOpenApiTypes(fixture("inline-recursion.openapi.jsonc"));
+	expect(problems.map((p) => [p.pointer.join("/"), p.code])).toEqual([
+		["components/schemas/A/$defs/Node/properties/next/$ref", ProblemCode.RefCycle],
+	]);
+	expect(problems[0]?.message).toBe(
+		'$ref "#/components/schemas/A/$defs/Node" points inside a schema to a schema that refers to itself; inspex cannot name it, so it is typed as unknown (move it to components.schemas to give it a type) (at #/components/schemas/A/$defs/Node/properties/next/$ref)',
+	);
+	expect(text).toContain('next?: components["schemas"]["Node"];');
 });

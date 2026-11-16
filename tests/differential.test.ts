@@ -154,6 +154,22 @@ export const percentEncoded: Same<ours.components["schemas"]["PercentEncoded"], 
 		ours: 'export const kind: Same<ours.components["schemas"]["A"]["__proto__"], "A"> = true;',
 		same: ["paths"],
 	},
+	"required-promotion": {
+		why: "upstream promotes `required` names found in the target's `properties`, even when the type it emits for the target lacks them (nullable, a union, a literal, a self-intersection): `WithRequired<T, K extends keyof T>` then does not compile; inspex promotes only keys of the emitted type, and gives a schema with its own shape beside a self-referencing allOf that shape",
+		upstream: ({ text }) => {
+			expect(text).toContain('FromNullable: WithRequired<components["schemas"]["Nullable"], "x">;');
+			expect(text).toContain('SelfAllOf: { x?: string; } & components["schemas"]["SelfAllOf"];');
+		},
+		upstreamCompiles: false,
+		ours: `
+type S = ours.components["schemas"];
+export const fromNullable: Same<S["FromNullable"], S["Nullable"]> = true;
+export const fromEither: Same<S["FromEither"], S["Either"]> = true;
+export const selfAllOf: Same<S["SelfAllOf"], { x?: string }> = true;
+export const fromSelfAllOf: Same<S["FromSelfAllOf"], { x: string }> = true;
+export const fromConst: Same<S["FromConst"], 3> = true;
+export const fromBase: Same<S["FromBase"], { x: string }> = true;`,
+	},
 	"prototype-required": {
 		why: 'upstream looks `required` names up through Object.prototype and emits `WithRequired<Base, "constructor">`, which does not compile',
 		upstream: ({ text }) =>

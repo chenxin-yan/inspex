@@ -208,7 +208,6 @@ const schemaMaps = new Set([
 ]);
 const schemaLists = new Set(["allOf", "anyOf", "oneOf", "prefixItems"]);
 const schemaValues = new Set([
-	"items",
 	"additionalProperties",
 	"not",
 	"contains",
@@ -221,25 +220,78 @@ const schemaValues = new Set([
 	"additionalItems",
 ]);
 
-/** Whether a pointer reaches a schema: from a schema root, through schema keywords only. */
+/** What the value at a position of an OpenAPI document is, as far as schema positions go. */
+type Position =
+	| "root"
+	| "components"
+	| "callback"
+	| "pathItem"
+	| "operation"
+	| "parameter"
+	| "requestBody"
+	| "response"
+	| "media"
+	| "schema"
+	/** A map or list whose every member is the given position. */
+	| { each: Position };
+
+const positionSteps: Partial<Record<Exclude<Position, object>, Record<string, Position>>> = {
+	root: { components: "components", paths: { each: "pathItem" }, webhooks: { each: "pathItem" } },
+	components: {
+		schemas: { each: "schema" },
+		parameters: { each: "parameter" },
+		headers: { each: "parameter" },
+		responses: { each: "response" },
+		requestBodies: { each: "requestBody" },
+		pathItems: { each: "pathItem" },
+		callbacks: { each: "callback" },
+	},
+	callback: {},
+	pathItem: {
+		parameters: { each: "parameter" },
+		...Object.fromEntries(methods.map((method) => [method, "operation"])),
+	},
+	operation: {
+		parameters: { each: "parameter" },
+		requestBody: "requestBody",
+		responses: { each: "response" },
+		callbacks: { each: "callback" },
+	},
+	// A parameter or a header.
+	parameter: { schema: "schema", content: { each: "media" } },
+	requestBody: { content: { each: "media" } },
+	response: { headers: { each: "parameter" }, content: { each: "media" } },
+	media: { schema: "schema" },
+};
+
+/**
+ * Whether a pointer reaches a Schema Object, by walking the document's structure from its root (never by
+ * how a segment is spelled: a response may be named "schema").
+ */
 function reachesSchema(doc: Json, pointer: readonly string[]): boolean {
-	let i: number;
-	if (pointer[0] === "components" && pointer[1] === "schemas" && pointer.length > 3) i = 3;
-	else {
-		// The `schema` of a parameter, header or media type.
-		const root = pointer.indexOf("schema");
-		if (root < 0) return false;
-		i = root + 1;
+	let position: Position = "root";
+	let node: unknown = doc;
+	for (const key of pointer) {
+		if (typeof position === "object") position = position.each;
+		else if (position === "callback") position = "pathItem";
+		else if (position === "schema") {
+			if (schemaMaps.has(key) || schemaLists.has(key)) position = { each: "schema" };
+			else if (key === "items") {
+				position = Array.isArray(isObject(node) ? node.items : undefined)
+					? { each: "schema" }
+					: "schema";
+			} else if (schemaValues.has(key)) position = "schema";
+			else return false;
+		} else {
+			const next: Position | undefined = positionSteps[position]?.[key];
+			if (next === undefined || !Object.hasOwn(positionSteps[position] ?? {}, key)) return false;
+			position = next;
+		}
+		if (!isObject(node) && !Array.isArray(node)) return false;
+		if (!Object.hasOwn(node, key)) return false;
+		node = (node as Json)[key];
 	}
-	while (i < pointer.length) {
-		const key = pointer[i] as string;
-		if (schemaMaps.has(key) || schemaLists.has(key)) i += 2;
-		else if (key === "items" && Array.isArray(resolvePointer(doc, pointer.slice(0, i + 1)))) i += 2;
-		else if (schemaValues.has(key)) i += 1;
-		else return false;
-	}
-	const target = resolvePointer(doc, pointer);
-	return i === pointer.length && (isObject(target) || typeof target === "boolean");
+	return position === "schema" && (isObject(node) || typeof node === "boolean");
 }
 
 interface Discriminator {
@@ -265,6 +317,13 @@ interface Context {
 	refCycles: Set<string>;
 	/** Pointers of schemas being inlined (`$ref`s into schemas), to stop at a cycle. */
 	inlining: Set<string>;
+	/**
+	 * Component schemas with their own shape beside composition `$ref`s back into their cycle: those
+	 * `$ref`s add nothing (A = {x} & A is just {x}) and are left out.
+	 */
+	effectiveSchemas: Map<string, Json>;
+	/** Property keys of the type emitted for each component schema (see `emittedKeys`). */
+	componentKeys: Map<string, Keys>;
 }
 
 function report(ctx: Context, location: Location, code: ProblemCode, message: string): void {
@@ -309,6 +368,8 @@ export function generateOpenApiTypes(doc: unknown, options: GenerateOptions = {}
 		aliasDeclarations: [],
 		refCycles: new Set(),
 		inlining: new Set(),
+		effectiveSchemas: new Map(),
+		componentKeys: new Map(),
 	};
 	scanDiscriminators(ctx);
 	analyzeRefCycles(ctx);
@@ -360,9 +421,10 @@ function componentsMembers(ctx: Context, components: Json): string[] {
 			for (const [name, item] of Object.entries(group)) {
 				const path = `#/components/${kind}/${escapePointer(name)}`;
 				const location = at(undefined, "components", kind, name);
+				const effective = kind === "schemas" ? (ctx.effectiveSchemas.get(name) ?? item) : item;
 				let type = ctx.refCycles.has(nodeKey(kind, name))
 					? UNKNOWN
-					: componentType(ctx, kind, item, path, location);
+					: componentType(ctx, kind, effective, path, location);
 				const alias = kind === "schemas" ? ctx.schemaAliases.get(name) : undefined;
 				if (alias) {
 					ctx.aliasDeclarations.push(`type ${alias} = ${type.text};\n`);
@@ -453,7 +515,7 @@ function refType(ctx: Context, value: unknown, location: Location, place: RefPla
 				ctx,
 				location,
 				ProblemCode.RefCycle,
-				`$ref "${value}" leads back to itself through $refs only, so it has no type; typed as unknown`,
+				`$ref "${value}" points inside a schema to a schema that refers to itself; inspex cannot name it, so it is typed as unknown (move it to components.schemas to give it a type)`,
 			);
 			return UNKNOWN;
 		}
@@ -578,9 +640,15 @@ function allOfTypes(ctx: Context, schema: Json, path: string, location: Location
 				!ctx.discriminatorRefsHandled.has(item.$ref as string)
 			) {
 				const properties = isObject(resolved.properties) ? resolved.properties : {};
+				// Upstream promotes by the target's `properties` alone; `WithRequired<T, K extends keyof T>`
+				// then does not compile when the type emitted for T lacks K (nullable, a union, a literal).
+				const emitted = emittedKeys(ctx, item, new Set());
 				const keys = required.filter(
 					(k): k is string =>
-						typeof k === "string" && Object.hasOwn(properties, k) && !!properties[k],
+						typeof k === "string" &&
+						Object.hasOwn(properties, k) &&
+						!!properties[k] &&
+						(emitted === "all" || emitted.has(k)),
 				);
 				if (keys.length) {
 					ctx.usesWithRequired = true;
@@ -1060,6 +1128,32 @@ function analyzeRefCycles(ctx: Context): void {
 			direct.set(node, directRefs);
 		}
 	}
+	const schemas = isObject(components.schemas) ? components.schemas : {};
+	for (const cycle of cycles(direct)) {
+		const inCycle = new Set(cycle);
+		for (const node of cycle) {
+			const { kind, name } = names.get(node) as { kind: ComponentKind; name: string };
+			const schema = schemas[name];
+			if (kind !== "schemas" || !isObject(schema) || !hasOwnShape(schema)) continue;
+			const effective = { ...schema };
+			for (const key of ["allOf", "anyOf", "oneOf"]) {
+				if (!Array.isArray(schema[key])) continue;
+				const kept = (schema[key] as unknown[]).filter((member) => {
+					const target = isObject(member) ? componentOf(parsePointer(member.$ref)) : undefined;
+					return !(target?.kind === "schemas" && inCycle.has(nodeKey("schemas", target.name)));
+				});
+				if (kept.length) effective[key] = kept;
+				else delete effective[key];
+			}
+			ctx.effectiveSchemas.set(name, effective);
+			const directRefs = new Set<string>();
+			schemaRefs(ctx.doc, effective, false, directRefs, new Set());
+			direct.set(node, directRefs);
+			const eagerRefs = new Set<string>();
+			schemaRefs(ctx.doc, effective, true, eagerRefs, new Set());
+			eager.set(node, eagerRefs);
+		}
+	}
 	for (const cycle of cycles(direct)) {
 		const members = cycle.map((node) => names.get(node)?.name as string);
 		for (const node of cycle) {
@@ -1083,6 +1177,123 @@ function analyzeRefCycles(ctx: Context): void {
 			ctx.schemaAliases.set(name, alias);
 		}
 	}
+}
+
+/** Whether a schema has a type of its own beside its composition keywords. */
+function hasOwnShape(schema: Json): boolean {
+	return (
+		schema.type !== undefined ||
+		(isObject(schema.properties) && Object.keys(schema.properties).length > 0) ||
+		!!schema.additionalProperties ||
+		isObject(schema.patternProperties)
+	);
+}
+
+/**
+ * The property keys of the type `schemaType` emits for `schema`, mirroring its structure: "all" when the
+ * type has a string index signature (any key is in `keyof`), and no keys where unsure, so a promotion is
+ * left out rather than emitted where it would not compile.
+ */
+type Keys = Set<string> | "all";
+const noKeys: Keys = new Set();
+
+function emittedKeys(ctx: Context, schema: unknown, seen: Set<unknown>): Keys {
+	if (!isObject(schema) || seen.has(schema)) return noKeys;
+	seen.add(schema);
+	try {
+		if ("$ref" in schema) {
+			const pointer = parsePointer(schema.$ref);
+			const component = componentOf(pointer);
+			if (component?.kind === "schemas") {
+				const node = nodeKey("schemas", component.name);
+				if (ctx.refCycles.has(node)) return noKeys;
+				const cached = ctx.componentKeys.get(component.name);
+				if (cached) return cached;
+				const schemas = isObject(ctx.doc.components) ? ctx.doc.components.schemas : undefined;
+				const target =
+					ctx.effectiveSchemas.get(component.name) ??
+					(isObject(schemas) && Object.hasOwn(schemas, component.name)
+						? schemas[component.name]
+						: undefined);
+				const keys = emittedKeys(ctx, target, seen);
+				ctx.componentKeys.set(component.name, keys);
+				return keys;
+			}
+			if (pointer && !component && reachesSchema(ctx.doc, pointer)) {
+				return emittedKeys(ctx, resolvePointer(ctx.doc, pointer), seen);
+			}
+			return noKeys;
+		}
+		if (schema.const !== null && schema.const !== undefined) return noKeys;
+		if (
+			Array.isArray(schema.enum) &&
+			schema.type !== "object" &&
+			!("properties" in schema) &&
+			!("additionalProperties" in schema)
+		) {
+			return noKeys;
+		}
+		// An intersection has the keys of all its members; a union only those every member has.
+		let keys: Keys | undefined = coreKeys(schema);
+		if (Array.isArray(schema.allOf)) {
+			for (const member of schema.allOf) {
+				let memberKeys = emittedKeys(ctx, member, seen);
+				const discriminator =
+					(isObject(member) &&
+						typeof member.$ref === "string" &&
+						ctx.discriminators.get(member.$ref)) ||
+					(isObject(member) && isObject(member.discriminator) ? member.discriminator : undefined);
+				if (discriminator && memberKeys !== "all") {
+					memberKeys = new Set([...memberKeys].filter((k) => k !== discriminator.propertyName));
+				}
+				keys = keys === undefined ? memberKeys : unionKeys(keys, memberKeys);
+			}
+		}
+		const anyOf = Array.isArray(schema.anyOf) ? schema.anyOf : [];
+		if (anyOf.length) {
+			keys = [...(keys ? [keys] : []), ...anyOf.map((m) => emittedKeys(ctx, m, seen))].reduce(
+				commonKeys,
+			);
+		}
+		const oneOf = Array.isArray(schema.oneOf) ? schema.oneOf : [];
+		if (oneOf.length) {
+			const common = oneOf.map((m) => emittedKeys(ctx, m, seen)).reduce(commonKeys);
+			// All members without keys may be primitives, whose union with the rest has no keys either.
+			keys = common !== "all" && !common.size ? noKeys : unionKeys(keys ?? noKeys, common);
+		}
+		if (keys === undefined) return "type" in schema ? "all" : noKeys;
+		return schema.nullable ? noKeys : keys;
+	} finally {
+		seen.delete(schema);
+	}
+}
+
+/** The keys of `schemaCore`'s type, or undefined where it emits none. */
+function coreKeys(schema: Json): Keys | undefined {
+	if (schema.type && schema.type !== "object") return noKeys;
+	// `schemaCore` may also add a discriminator property, found by the schema's path; left out here, so a
+	// promotion of that property alone is left out too (the discriminator's own patch makes it required).
+	const keys = new Set<string>();
+	const properties = isObject(schema.properties) ? Object.keys(schema.properties) : [];
+	if (
+		!(properties.length || schema.additionalProperties || schema.patternProperties || schema.$defs)
+	) {
+		return undefined;
+	}
+	if (schema.additionalProperties || isObject(schema.patternProperties)) return "all";
+	for (const key of properties) keys.add(key);
+	if (isObject(schema.$defs) && Object.keys(schema.$defs).length) keys.add("$defs");
+	return keys;
+}
+
+function unionKeys(a: Keys, b: Keys): Keys {
+	return a === "all" || b === "all" ? "all" : new Set([...a, ...b]);
+}
+
+function commonKeys(a: Keys, b: Keys): Keys {
+	if (a === "all") return b;
+	if (b === "all") return a;
+	return new Set([...a].filter((k) => b.has(k)));
 }
 
 /**

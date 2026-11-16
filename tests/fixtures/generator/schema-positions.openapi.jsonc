@@ -1,0 +1,64 @@
+// $refs that point at schemas inside components named like schema keywords, and at things that are not
+// schemas. Whether a pointer reaches a schema depends on the document's structure, not on a segment's name.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "schema positions", "version": "1" },
+	"paths": {
+		"/a/{id}": {
+			"get": {
+				"parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+				"responses": {}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"schema": { "type": "object", "properties": { "items": { "type": "string" }, "properties": { "type": "integer" } } },
+			"properties": { "type": "array", "items": { "type": "boolean" } },
+			"items": { "type": "object", "properties": { "schema": { "type": "number" } } },
+			"RefSchemaItems": { "$ref": "#/components/schemas/schema/properties/items" },
+			"RefSchemaProperties": { "$ref": "#/components/schemas/schema/properties/properties" },
+			"RefPropertiesItems": { "$ref": "#/components/schemas/properties/items" },
+			"RefItemsSchema": { "$ref": "#/components/schemas/items/properties/schema" },
+			"RefResponse": { "$ref": "#/components/responses/schema/content/text~1plain/schema" },
+			"RefParameter": { "$ref": "#/components/parameters/items/schema" },
+			"RefParameterContent": { "$ref": "#/components/parameters/properties/content/application~1json/schema" },
+			"RefHeader": { "$ref": "#/components/headers/schema/schema" },
+			"RefRequestBody": { "$ref": "#/components/requestBodies/properties/content/application~1json/schema" },
+			"RefPathItem": { "$ref": "#/components/pathItems/schema/get/responses/200/content/text~1plain/schema" },
+			"RefPathParameter": { "$ref": "#/paths/~1a~1{id}/get/parameters/0/schema" },
+			"RefExample": { "$ref": "#/components/examples/schema" },
+			"RefParameterObject": { "$ref": "#/components/parameters/items" },
+			"RefParameterName": { "$ref": "#/components/parameters/schema/name" },
+			"RefSchemaPropertiesMap": { "$ref": "#/components/schemas/schema/properties" }
+		},
+		"responses": {
+			"schema": { "description": "ok", "content": { "text/plain": { "schema": { "type": "string" } } } },
+			"properties": { "description": "ok" },
+			"items": { "description": "ok" }
+		},
+		"parameters": {
+			"schema": { "name": "schema", "in": "header", "schema": { "type": "string" } },
+			"properties": { "name": "p", "in": "query", "content": { "application/json": { "schema": { "type": "integer" } } } },
+			"items": { "name": "q", "in": "query", "schema": { "type": "string" } }
+		},
+		"headers": {
+			"schema": { "schema": { "type": "boolean" } },
+			"properties": { "schema": { "type": "string" } },
+			"items": { "schema": { "type": "string" } }
+		},
+		"requestBodies": {
+			"schema": { "content": {} },
+			"properties": { "content": { "application/json": { "schema": { "type": "string" } } } },
+			"items": { "content": {} }
+		},
+		"pathItems": {
+			"schema": {
+				"get": { "responses": { "200": { "description": "ok", "content": { "text/plain": { "schema": { "type": "number" } } } } } }
+			},
+			"properties": {},
+			"items": {}
+		},
+		"examples": { "schema": { "value": 123 } }
+	}
+}

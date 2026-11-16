@@ -1,0 +1,18 @@
+// A recursive schema reached by a $ref into another schema has no name inspex can refer to, so it is
+// `unknown` and reported (README "Limits"); the same schema in components.schemas is typed.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "inline recursion", "version": "1" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"A": {
+				"$defs": {
+					"Node": { "type": "object", "properties": { "next": { "$ref": "#/components/schemas/A/$defs/Node" } } }
+				}
+			},
+			"UsesNode": { "$ref": "#/components/schemas/A/$defs/Node" },
+			"Node": { "type": "object", "properties": { "next": { "$ref": "#/components/schemas/Node" } } }
+		}
+	}
+}
