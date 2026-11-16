@@ -3,9 +3,9 @@
 import { existsSync } from "node:fs";
 import { relative } from "node:path";
 
+import { formatOf, type MappedSpec, type SpecProblem } from "../formats.ts";
+import { ProblemCode } from "../openapi.ts";
 import { cacheDirectory, cacheKey, readCache, writeCache } from "./cache.ts";
-import { formatOf, type MappedSpec, type SpecProblem } from "./formats.ts";
-import { ProblemCode } from "./openapi.ts";
 import { type MapperOptions, parseOptions } from "./options.ts";
 import {
 	DiagnosticDirectivePolicy,

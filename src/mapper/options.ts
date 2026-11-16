@@ -1,6 +1,6 @@
 // The `options` object of a `contentMappers` entry for inspex.
 
-import { ProblemCode } from "./openapi.ts";
+import { ProblemCode } from "../openapi.ts";
 import type { OptionDiagnostic } from "./protocol.ts";
 
 export interface MapperOptions {

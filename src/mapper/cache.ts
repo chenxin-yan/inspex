@@ -22,7 +22,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 
-import type { MappedSpec } from "./formats.ts";
+import type { MappedSpec } from "../formats.ts";
 
 export function cacheDirectory(configFileName: string): string | undefined {
 	return configFileName

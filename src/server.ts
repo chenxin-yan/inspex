@@ -5,14 +5,14 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { Mapper } from "./mapper.ts";
+import { Mapper } from "./mapper/mapper.ts";
 import type {
 	CloseProjectParams,
 	InitializeParams,
 	OpenProjectParams,
 	TransformParams,
-} from "./protocol.ts";
-import { createMessageReader, encodeMessage } from "./rpc.ts";
+} from "./mapper/protocol.ts";
+import { createMessageReader, encodeMessage } from "./mapper/rpc.ts";
 
 const mapper = new Mapper(
 	createHash("sha256")

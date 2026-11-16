@@ -8,8 +8,8 @@ import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
+import { ProblemCode } from "../openapi.ts";
 import { Mapper, registrationText } from "./mapper.ts";
-import { ProblemCode } from "./openapi.ts";
 
 const spec = JSON.stringify({ openapi: "3.1.0", info: { title: "t", version: "1" }, paths: {} });
 const register = { module: "@acme/client", interface: "Specs" };
