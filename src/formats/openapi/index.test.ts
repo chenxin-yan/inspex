@@ -5,8 +5,9 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseJsonc } from "./jsonc.ts";
-import { generateOpenApiTypes, ProblemCode } from "./openapi.ts";
+import { parseJsonc } from "../../jsonc.ts";
+import { ProblemCode } from "../../problems.ts";
+import { generateOpenApiTypes } from "./index.ts";
 
 const doc = (extra: Record<string, unknown>) => ({
 	openapi: "3.1.0",
@@ -223,7 +224,17 @@ it("exports the read/write helpers only with readWriteMarkers", () => {
 function fixture(name: string): unknown {
 	const parsed = parseJsonc(
 		readFileSync(
-			join(import.meta.dirname, "..", "tests", "fixtures", "openapi", "generator", name),
+			join(
+				import.meta.dirname,
+				"..",
+				"..",
+				"..",
+				"tests",
+				"fixtures",
+				"openapi",
+				"generator",
+				name,
+			),
 			"utf8",
 		),
 	);

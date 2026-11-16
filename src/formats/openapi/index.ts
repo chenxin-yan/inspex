@@ -3,8 +3,11 @@
 // The output equals what openapi-typescript 7 emits with its default options (so tools built on them, such
 // as openapi-fetch, work unchanged), except where upstream's output is wrong or does not compile: there it
 // is the correct type, or `unknown` and a problem. Each difference is named in tests/differential.test.ts
-// and in the README. Upstream quirks that do not make types wrong (the `path` strings below, discriminator
+// and in docs/reference.md. Upstream quirks that do not make types wrong (the `path` strings below, discriminator
 // patching) are mirrored on purpose.
+
+import { locateJsonPointers, parseJsonc, pointerKey } from "../../jsonc.ts";
+import { type MappedSpec, ProblemCode } from "../../problems.ts";
 
 export interface Problem {
 	/** JSON pointer segments of the offending value. */
@@ -12,21 +15,6 @@ export interface Problem {
 	message: string;
 	code: ProblemCode;
 }
-
-/** Diagnostic codes, shown as `inspex<code>`. */
-export const ProblemCode = {
-	InvalidSyntax: 1,
-	UnsupportedDocument: 2,
-	DuplicateOperationId: 3,
-	UnresolvableRef: 4,
-	UnsupportedRef: 5,
-	InvalidValue: 6,
-	DuplicateRegisteredName: 7,
-	InternalError: 8,
-	InvalidOption: 9,
-	RefCycle: 10,
-} as const;
-export type ProblemCode = (typeof ProblemCode)[keyof typeof ProblemCode];
 
 export interface GenerateOptions {
 	/** Mirrors openapi-typescript's `readWriteMarkers`. */
@@ -1478,4 +1466,41 @@ function walk(node: unknown, path: string, visit: (node: Json, path: string) => 
 		visit(node, path);
 		for (const key of Object.keys(node)) walk(node[key], `${path}/${escapePointer(key)}`, visit);
 	}
+}
+
+/** A `.openapi.jsonc` file: JSONC text in, declarations and located problems out. */
+export function mapOpenApiJsonc(content: string, options: GenerateOptions): MappedSpec {
+	const parsed = parseJsonc(content);
+	if (!parsed.ok) {
+		const { message, start, length } = parsed.error;
+		return {
+			text: undefined,
+			problems: [
+				{ start, length, code: ProblemCode.InvalidSyntax, message: `Invalid JSONC: ${message}` },
+			],
+		};
+	}
+	let result;
+	try {
+		result = generateOpenApiTypes(parsed.value, options);
+	} catch (error) {
+		const message = `inspex failed to type this spec: ${error instanceof Error ? error.message : String(error)}`;
+		return {
+			text: undefined,
+			problems: [{ start: 0, length: 0, code: ProblemCode.InternalError, message }],
+		};
+	}
+	// Locating needs another pass over the whole text; most specs have nothing to locate.
+	if (!result.problems.length) return { text: result.text, problems: [] };
+	const ranges = locateJsonPointers(
+		content,
+		result.problems.map((p) => p.pointer),
+	);
+	const problems = result.problems.map(({ pointer, message, code }) => {
+		const range = ranges.get(pointerKey(pointer)) ?? { start: 0, length: 0 };
+		// Underline an object or array by its opening bracket, not its whole extent.
+		const bracket = /[[{]/.test(content.charAt(range.start));
+		return { start: range.start, length: bracket ? 1 : range.length, message, code };
+	});
+	return { text: result.text, problems };
 }

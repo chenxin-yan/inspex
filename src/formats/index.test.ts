@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { formatOf } from "./formats.ts";
-import { ProblemCode } from "./openapi.ts";
+import { ProblemCode } from "../problems.ts";
+import { formatOf } from "./index.ts";
 
 describe("formatOf", () => {
 	it.each([
