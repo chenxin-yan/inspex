@@ -150,14 +150,16 @@ describe("problems in specs", () => {
 });
 
 describe("where the mapper does not run, the import does not resolve", () => {
-	const unresolved =
-		"src/app.ts(1,52): error TS2307: Cannot find module './acme.openapi.jsonc' or its corresponding type declarations.";
+	const unresolved = [
+		"src/app.ts(1,52): error TS2307: Cannot find module './acme.openapi.jsonc' or its corresponding type declarations.",
+		"src/fetch.ts(2,40): error TS2307: Cannot find module './acme.openapi.jsonc' or its corresponding type declarations.",
+	];
 
 	it(
 		"TypeScript 7.1 without --runExternalCode",
 		() => {
 			expect(run("basic", ["-p", "."], 2)).toEqual([
-				unresolved,
+				...unresolved,
 				"tsconfig.json(4,2): error TS18068: Content mappers require the '--runExternalCode' command line flag to be enabled.",
 			]);
 		},
@@ -167,7 +169,7 @@ describe("where the mapper does not run, the import does not resolve", () => {
 	it(
 		"TypeScript 7.0",
 		() => {
-			expect(run("basic", ["-p", "."], 1, "typescript-7.0")).toEqual([unresolved]);
+			expect(run("basic", ["-p", "."], 1, "typescript-7.0")).toEqual(unresolved);
 			expect(run("basic", ["-p", ".", "--runExternalCode"], 1, "typescript-7.0")).toEqual([
 				"error TS5023: Unknown compiler option '--runExternalCode'.",
 			]);
