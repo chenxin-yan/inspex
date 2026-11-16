@@ -1,0 +1,15 @@
+// A discriminator named "__proto__" is an own property of the mapped schemas (upstream loses it).
+{
+	"openapi": "3.0.3",
+	"info": { "title": "__proto__ discriminator", "version": "1" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"Choice": {
+				"oneOf": [{ "$ref": "#/components/schemas/A" }],
+				"discriminator": { "propertyName": "__proto__" }
+			},
+			"A": { "type": "object", "properties": { "id": { "type": "string" } } }
+		}
+	}
+}

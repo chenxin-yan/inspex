@@ -136,7 +136,11 @@ describe("problems in specs", () => {
 				`src/broken.openapi.jsonc(6,35): error inspex3: Duplicate operationId "same", first used at #/paths/~1a/get/operationId; this operation is typed inline in paths and left out of operations (at #/paths/~1b/get/operationId)`,
 				`src/broken.openapi.jsonc(11,91): error inspex4: Cannot resolve $ref "#/components/schemas/Missing"; typed as unknown (at #/paths/~1c/get/responses/200/content/application~1json/schema/$ref)`,
 				`src/broken.openapi.jsonc(12,91): error inspex5: External $ref "./other.json#/Thing" is not supported (inspex reads one file); typed as unknown (at #/paths/~1c/get/responses/201/content/application~1json/schema/$ref)`,
-				`src/broken.openapi.jsonc(19,113): error inspex4: Cannot resolve $ref "#/components/examples/X"; typed as unknown (at #/components/schemas/Good/properties/bad/$ref)`,
+				// Two unresolved parameters, each reported, and a path item that is not an object.
+				`src/broken.openapi.jsonc(18,30): error inspex4: Cannot resolve $ref "#/components/parameters/One"; typed as unknown (at #/paths/~1d/get/parameters/0/$ref)`,
+				`src/broken.openapi.jsonc(18,73): error inspex4: Cannot resolve $ref "#/components/parameters/Two"; typed as unknown (at #/paths/~1d/get/parameters/1/$ref)`,
+				"src/broken.openapi.jsonc(22,11): error inspex6: Expected a path item object; left out (at #/paths/~1bad)",
+				`src/broken.openapi.jsonc(26,113): error inspex4: Cannot resolve $ref "#/components/examples/X"; typed as unknown (at #/components/schemas/Good/properties/bad/$ref)`,
 				"src/invalid.openapi.jsonc(3,31): error inspex1: Invalid JSONC: Expected ',' or '}'.",
 				"src/notes.openapi.yaml(1,1): error inspex2: inspex reads files named <name>.openapi.jsonc; register only that extension for inspex.",
 				"src/swagger.openapi.jsonc(1,14): error inspex2: Swagger 2.0 is not supported: convert the document to OpenAPI 3.0 or 3.1.",

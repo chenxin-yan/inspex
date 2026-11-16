@@ -1,0 +1,24 @@
+// $ref cycles with no object or array in between cannot be a type: `unknown` and a diagnostic (upstream
+// rejects the document). Recursion through an array keeps its type.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "ref cycles", "version": "1" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"A": { "$ref": "#/components/schemas/B" },
+			"B": { "$ref": "#/components/schemas/A" },
+			"C": { "anyOf": [{ "$ref": "#/components/schemas/C" }, { "type": "string" }] },
+			"Json": { "anyOf": [{ "type": "array", "items": { "$ref": "#/components/schemas/Json" } }, { "type": "string" }] },
+			"SelfDeep": {
+				"type": "object",
+				"properties": { "child": { "$ref": "#/components/schemas/SelfDeep/properties/child" } }
+			},
+			"UsesA": { "type": "object", "required": ["a"], "properties": { "a": { "$ref": "#/components/schemas/A" } } }
+		},
+		"parameters": {
+			"P1": { "$ref": "#/components/parameters/P2" },
+			"P2": { "$ref": "#/components/parameters/P1" }
+		}
+	}
+}

@@ -1,0 +1,7 @@
+// An empty `components` object: the six component groups, each `never`, as upstream emits.
+{
+	"openapi": "3.0.3",
+	"info": { "title": "empty components", "version": "1" },
+	"paths": {},
+	"components": {}
+}

@@ -57,11 +57,11 @@ describe("a broken part of a spec", () => {
 			'Cannot resolve $ref "#/components/schemas/Missing"',
 		],
 		["other.json#/A", ProblemCode.UnsupportedRef, 'External $ref "other.json#/A" is not supported'],
-		["#/paths/~1a", ProblemCode.UnsupportedRef, '$ref "#/paths/~1a" is not supported'],
+		["#/paths/~1a", ProblemCode.UnsupportedRef, '$ref "#/paths/~1a" does not point to a schema'],
 		[
-			"#/components/schemas/A/items",
+			"#/components/schemas/A/type",
 			ProblemCode.UnsupportedRef,
-			'$ref "#/components/schemas/A/items" is not supported',
+			'$ref "#/components/schemas/A/type" does not point to a schema',
 		],
 	])("types $ref %s as unknown and reports it", (ref, code, message) => {
 		const { text, problems } = generateOpenApiTypes(
@@ -94,6 +94,41 @@ describe("a broken part of a spec", () => {
 			["paths", "/a", "get", "parameters", "0", "$ref"],
 		]);
 		expect(text).toContain("query?: never;");
+	});
+
+	it("reports a path item that is not an object", () => {
+		const { text, problems } = generateOpenApiTypes(doc({ paths: { "/bad": 42, "/a": get("a") } }));
+		expect(problems.map((p) => [p.pointer, p.code])).toEqual([
+			[["paths", "/bad"], ProblemCode.InvalidValue],
+		]);
+		expect(text).toContain('"/a": {');
+		expect(text).not.toContain('"/bad"');
+	});
+
+	it("reports every unresolved parameter reference, and a parameter without a name or location", () => {
+		const { problems } = generateOpenApiTypes(
+			doc({
+				paths: {
+					"/a": {
+						parameters: [{ $ref: "#/components/parameters/One" }],
+						get: {
+							parameters: [
+								{ $ref: "#/components/parameters/Two" },
+								{ $ref: "#/components/parameters/Three" },
+								{ name: "x", in: "body", schema: { type: "string" } },
+							],
+							responses: {},
+						},
+					},
+				},
+			}),
+		);
+		expect(problems.map((p) => [p.pointer.join("/"), p.code])).toEqual([
+			["paths//a/parameters/0/$ref", ProblemCode.UnresolvableRef],
+			["paths//a/get/parameters/0/$ref", ProblemCode.UnresolvableRef],
+			["paths//a/get/parameters/1/$ref", ProblemCode.UnresolvableRef],
+			["paths//a/get/parameters/2", ProblemCode.InvalidValue],
+		]);
 	});
 
 	it("reports a value that is not a schema and types it as unknown", () => {
@@ -150,6 +185,48 @@ describe("deliberate differences from openapi-typescript", () => {
 		// Through an object property, recursion is lazy and needs no alias.
 		expect(text).toContain('children?: components["schemas"]["Tree"][];');
 	});
+});
+
+describe("limits inherited from openapi-typescript", () => {
+	it("ignores the siblings of a 3.1 $ref", () => {
+		const { text } = generateOpenApiTypes(
+			doc({
+				components: {
+					schemas: {
+						A: { type: "object", properties: { id: { type: "string" } } },
+						B: {
+							$ref: "#/components/schemas/A",
+							required: ["id"],
+							properties: { name: { type: "string" } },
+						},
+					},
+				},
+			}),
+		);
+		expect(text).toContain('B: components["schemas"]["A"];');
+	});
+
+	it("types { const: null } as unknown", () => {
+		const { text } = generateOpenApiTypes(doc({ components: { schemas: { N: { const: null } } } }));
+		expect(text).toContain("N: unknown;");
+	});
+});
+
+it("adds a discriminator named __proto__ as an own property", () => {
+	const { text } = generateOpenApiTypes(
+		doc({
+			components: {
+				schemas: {
+					Choice: {
+						oneOf: [{ $ref: "#/components/schemas/A" }],
+						discriminator: { propertyName: "__proto__" },
+					},
+					A: { type: "object", properties: { id: { type: "string" } } },
+				},
+			},
+		}),
+	);
+	expect(text).toContain('__proto__: "A";');
 });
 
 it("exports the read/write helpers only with readWriteMarkers", () => {

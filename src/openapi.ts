@@ -1,13 +1,10 @@
 // OpenAPI 3.0 / 3.1 document -> declarations for `paths`, `components` and `operations`.
 //
-// The output follows the shapes openapi-typescript 7 emits with its default options (so tools built on
-// them, such as openapi-fetch, work unchanged), with the deviations listed in the README:
-// - `{ type: "object" }` without properties is `Record<string, unknown>` (upstream: `Record<string, never>`,
-//   upstream's `emptyObjectsUnknown` option);
-// - a spec without operationIds has `interface operations {}` (upstream: `Record<string, never>`);
-// - a broken part of a spec is typed `unknown` and reported, instead of failing the whole document.
-// Upstream quirks that change types (the `path` strings below, discriminator patching) are mirrored on
-// purpose; tests/differential.test.ts compares the two.
+// The output equals what openapi-typescript 7 emits with its default options (so tools built on them, such
+// as openapi-fetch, work unchanged), except where upstream's output is wrong or does not compile: there it
+// is the correct type, or `unknown` and a problem. Each difference is named in tests/differential.test.ts
+// and in the README. Upstream quirks that do not make types wrong (the `path` strings below, discriminator
+// patching) are mirrored on purpose.
 
 export interface Problem {
 	/** JSON pointer segments of the offending value. */
@@ -27,6 +24,7 @@ export const ProblemCode = {
 	DuplicateRegisteredName: 7,
 	InternalError: 8,
 	InvalidOption: 9,
+	RefCycle: 10,
 } as const;
 export type ProblemCode = (typeof ProblemCode)[keyof typeof ProblemCode];
 
@@ -177,15 +175,71 @@ export function formatPointer(pointer: readonly string[]): string {
 function escapePointer(segment: string): string {
 	return segment.replaceAll("~", "~0").replaceAll("/", "~1");
 }
-function parsePointer(ref: string): string[] | undefined {
+/** The segments of a local `$ref` ("#/..."), or undefined for anything else. */
+function parsePointer(ref: unknown): string[] | undefined {
+	if (typeof ref !== "string" || !ref.startsWith("#/")) return undefined;
+	let pointer: string;
 	try {
-		return ref
-			.slice(2)
-			.split("/")
-			.map((s) => decodeURIComponent(s.replaceAll("~1", "/").replaceAll("~0", "~")));
+		// A URI fragment is percent-decoded before its JSON Pointer escapes are read (RFC 6901 §6).
+		pointer = decodeURIComponent(ref.slice(2));
 	} catch {
 		return undefined;
 	}
+	return pointer.split("/").map((s) => s.replaceAll("~1", "/").replaceAll("~0", "~"));
+}
+
+const nodeKey = (kind: string, name: string): string => `${kind}\0${name}`;
+
+/** `#/components/<kind>/<name>` as kind and name, or undefined. */
+function componentOf(
+	pointer: readonly string[] | undefined,
+): { kind: ComponentKind; name: string } | undefined {
+	if (pointer?.length !== 3 || pointer[0] !== "components") return undefined;
+	const kind = pointer[1] as ComponentKind;
+	return componentKinds.includes(kind) ? { kind, name: pointer[2] as string } : undefined;
+}
+
+const schemaMaps = new Set([
+	"properties",
+	"patternProperties",
+	"$defs",
+	"definitions",
+	"dependentSchemas",
+]);
+const schemaLists = new Set(["allOf", "anyOf", "oneOf", "prefixItems"]);
+const schemaValues = new Set([
+	"items",
+	"additionalProperties",
+	"not",
+	"contains",
+	"if",
+	"then",
+	"else",
+	"propertyNames",
+	"unevaluatedItems",
+	"unevaluatedProperties",
+	"additionalItems",
+]);
+
+/** Whether a pointer reaches a schema: from a schema root, through schema keywords only. */
+function reachesSchema(doc: Json, pointer: readonly string[]): boolean {
+	let i: number;
+	if (pointer[0] === "components" && pointer[1] === "schemas" && pointer.length > 3) i = 3;
+	else {
+		// The `schema` of a parameter, header or media type.
+		const root = pointer.indexOf("schema");
+		if (root < 0) return false;
+		i = root + 1;
+	}
+	while (i < pointer.length) {
+		const key = pointer[i] as string;
+		if (schemaMaps.has(key) || schemaLists.has(key)) i += 2;
+		else if (key === "items" && Array.isArray(resolvePointer(doc, pointer.slice(0, i + 1)))) i += 2;
+		else if (schemaValues.has(key)) i += 1;
+		else return false;
+	}
+	const target = resolvePointer(doc, pointer);
+	return i === pointer.length && (isObject(target) || typeof target === "boolean");
 }
 
 interface Discriminator {
@@ -204,9 +258,13 @@ interface Context {
 	usesWithRequired: boolean;
 	discriminators: Map<string, Discriminator>;
 	discriminatorRefsHandled: Set<string>;
-	/** Type alias names for component schemas on an eager reference cycle (see `recursiveSchemaAliases`). */
+	/** Type alias names for component schemas on an eager reference cycle (see `analyzeRefCycles`). */
 	schemaAliases: Map<string, string>;
 	aliasDeclarations: string[];
+	/** Components on a $ref cycle without an object or array in between, by node key: typed `unknown`. */
+	refCycles: Set<string>;
+	/** Pointers of schemas being inlined (`$ref`s into schemas), to stop at a cycle. */
+	inlining: Set<string>;
 }
 
 function report(ctx: Context, location: Location, code: ProblemCode, message: string): void {
@@ -249,21 +307,24 @@ export function generateOpenApiTypes(doc: unknown, options: GenerateOptions = {}
 		discriminatorRefsHandled: new Set(),
 		schemaAliases: new Map(),
 		aliasDeclarations: [],
+		refCycles: new Set(),
+		inlining: new Set(),
 	};
 	scanDiscriminators(ctx);
-	if (isObject(doc.components) && isObject(doc.components.schemas)) {
-		ctx.schemaAliases = recursiveSchemaAliases(doc.components.schemas);
-	}
+	analyzeRefCycles(ctx);
 
 	let paths = "export type paths = Record<string, never>;\n";
 	if (isObject(doc.paths)) {
 		const members: string[] = [];
 		for (const [url, item] of Object.entries(doc.paths)) {
 			const location = at(undefined, "paths", url);
-			if (!isObject(item)) continue;
+			if (!isObject(item)) {
+				report(ctx, location, ProblemCode.InvalidValue, "Expected a path item object; left out");
+				continue;
+			}
 			const type =
 				"$ref" in item
-					? refType(ctx, item.$ref, at(location, "$ref"))
+					? refType(ctx, item.$ref, at(location, "$ref"), "pathItems")
 					: pathItem(ctx, item, `#/paths/${escapePointer(url)}`, location);
 			members.push(`${jsDoc(item)}${propertyKey(url)}: ${type.text};`);
 		}
@@ -277,10 +338,8 @@ export function generateOpenApiTypes(doc: unknown, options: GenerateOptions = {}
 			}
 		}
 	}
-	let components = "export type components = Record<string, never>;\n";
-	if (isObject(doc.components)) {
-		components = `export interface components {\n${componentsMembers(ctx, doc.components).join("\n")}\n}\n`;
-	}
+	const componentsObject = isObject(doc.components) ? doc.components : {};
+	const components = `export interface components {\n${componentsMembers(ctx, componentsObject).join("\n")}\n}\n`;
 	const operations = `export interface operations {\n${ctx.operations.join("\n")}\n}\n`;
 	const text =
 		(ctx.readWriteMarkers ? readWriteHelpers : "") +
@@ -301,7 +360,9 @@ function componentsMembers(ctx: Context, components: Json): string[] {
 			for (const [name, item] of Object.entries(group)) {
 				const path = `#/components/${kind}/${escapePointer(name)}`;
 				const location = at(undefined, "components", kind, name);
-				let type = componentType(ctx, kind, item, path, location);
+				let type = ctx.refCycles.has(nodeKey(kind, name))
+					? UNKNOWN
+					: componentType(ctx, kind, item, path, location);
 				const alias = kind === "schemas" ? ctx.schemaAliases.get(name) : undefined;
 				if (alias) {
 					ctx.aliasDeclarations.push(`type ${alias} = ${type.text};\n`);
@@ -323,6 +384,8 @@ function componentType(
 	location: Location,
 ): Type {
 	if (kind === "schemas") return schemaType(ctx, item, path, location);
+	// An alias of another component has its target's type.
+	if (isObject(item) && "$ref" in item) return refType(ctx, item.$ref, at(location, "$ref"), kind);
 	if (!isObject(item)) {
 		report(
 			ctx,
@@ -346,8 +409,11 @@ function componentType(
 	}
 }
 
-/** The referenced component's type, or `unknown` after reporting why it cannot be referenced. */
-function refType(ctx: Context, value: unknown, location: Location): Type {
+/** Where a `$ref` is: in a schema, an operation, or in place of a component of one kind. */
+type RefPlace = "schema" | "operation" | Exclude<ComponentKind, "schemas">;
+
+/** The referenced type, or `unknown` after reporting why it cannot be referenced. */
+function refType(ctx: Context, value: unknown, location: Location, place: RefPlace): Type {
 	if (typeof value !== "string") {
 		report(ctx, location, ProblemCode.InvalidValue, "$ref must be a string; typed as unknown");
 		return UNKNOWN;
@@ -362,7 +428,8 @@ function refType(ctx: Context, value: unknown, location: Location): Type {
 		return UNKNOWN;
 	}
 	const pointer = parsePointer(value);
-	if (!pointer || resolvePointer(ctx.doc, pointer) === undefined) {
+	const target = pointer && resolvePointer(ctx.doc, pointer);
+	if (!pointer || target === undefined) {
 		report(
 			ctx,
 			location,
@@ -371,29 +438,48 @@ function refType(ctx: Context, value: unknown, location: Location): Type {
 		);
 		return UNKNOWN;
 	}
-	const [root, kind, name, ...rest] = pointer;
-	// Below a component, only `properties/<name>` steps map to a type: upstream indexes every step,
-	// which is wrong through `items`, `allOf` and the like.
-	const propertySteps =
-		rest.length % 2 === 0 && rest.every((s, i) => i % 2 === 1 || s === "properties");
-	if (
-		root !== "components" ||
-		!componentKinds.includes(kind as ComponentKind) ||
-		name === undefined ||
-		!propertySteps
-	) {
-		report(
-			ctx,
-			location,
-			ProblemCode.UnsupportedRef,
-			`$ref "${value}" is not supported: only references to #/components/{${componentKinds.join(",")}}/<name> (and their properties) are typed; typed as unknown`,
-		);
-		return UNKNOWN;
+	const component = componentOf(pointer);
+	const kind = place === "schema" ? "schemas" : place;
+	if (component?.kind === kind) {
+		const alias = kind === "schemas" ? ctx.schemaAliases.get(component.name) : undefined;
+		return atom(alias ?? `components[${JSON.stringify(kind)}][${JSON.stringify(component.name)}]`);
 	}
-	const alias = kind === "schemas" && !rest.length ? ctx.schemaAliases.get(name) : undefined;
-	if (alias) return atom(alias);
-	const steps = [kind as string, name, ...rest.filter((_, i) => i % 2 === 1)];
-	return atom(`components${steps.map((s) => `[${JSON.stringify(s)}]`).join("")}`);
+	// Upstream indexes the component type along the pointer, which does not compile through optional
+	// properties, `items` and the like; the schema the pointer reaches is inlined instead.
+	if (place === "schema" && !component && reachesSchema(ctx.doc, pointer)) {
+		const key = pointer.join("\0");
+		if (ctx.inlining.has(key)) {
+			report(
+				ctx,
+				location,
+				ProblemCode.RefCycle,
+				`$ref "${value}" leads back to itself through $refs only, so it has no type; typed as unknown`,
+			);
+			return UNKNOWN;
+		}
+		ctx.inlining.add(key);
+		try {
+			return schemaType(
+				ctx,
+				target,
+				`#/${pointer.map(escapePointer).join("/")}`,
+				at(undefined, ...pointer),
+			);
+		} finally {
+			ctx.inlining.delete(key);
+		}
+	}
+	report(
+		ctx,
+		location,
+		ProblemCode.UnsupportedRef,
+		place === "schema"
+			? `$ref "${value}" does not point to a schema; typed as unknown`
+			: place === "operation"
+				? `An operation cannot be a $ref ("${value}"); typed as unknown`
+				: `$ref "${value}" must point to #/components/${place}/<name> here; typed as unknown`,
+	);
+	return UNKNOWN;
 }
 
 function resolvePointer(doc: unknown, pointer: readonly string[]): unknown {
@@ -405,13 +491,17 @@ function resolvePointer(doc: unknown, pointer: readonly string[]): unknown {
 	return node;
 }
 
-/** Upstream's resolver: truthy steps, following `$ref` chains. Used where upstream decides with it. */
+/**
+ * Upstream's resolver: truthy steps, following `$ref` chains. Used where upstream decides with it, but on
+ * own properties only (upstream also finds `constructor` and the like on Object.prototype).
+ */
 function resolveRefLoosely(doc: Json, ref: unknown, visited: string[] = []): unknown {
-	if (typeof ref !== "string" || !ref.startsWith("#/")) return undefined;
+	const pointer = parsePointer(ref);
+	if (!pointer) return undefined;
 	let node: unknown = doc;
-	for (const key of parsePointer(ref) ?? []) {
+	for (const key of pointer) {
 		if (key === "") continue;
-		if (isObject(node) || Array.isArray(node)) {
+		if ((isObject(node) || Array.isArray(node)) && Object.hasOwn(node, key)) {
 			const next = (node as Json)[key];
 			if (!next) return undefined;
 			node = next;
@@ -431,7 +521,7 @@ function schemaType(ctx: Context, schema: unknown, path: string, location: Locat
 		report(ctx, location, ProblemCode.InvalidValue, "Expected a schema object; typed as unknown");
 		return UNKNOWN;
 	}
-	if ("$ref" in schema) return refType(ctx, schema.$ref, at(location, "$ref"));
+	if ("$ref" in schema) return refType(ctx, schema.$ref, at(location, "$ref"), "schema");
 	if (schema.const !== null && schema.const !== undefined) return literal(schema.const);
 	if (
 		Array.isArray(schema.enum) &&
@@ -488,7 +578,10 @@ function allOfTypes(ctx: Context, schema: Json, path: string, location: Location
 				!ctx.discriminatorRefsHandled.has(item.$ref as string)
 			) {
 				const properties = isObject(resolved.properties) ? resolved.properties : {};
-				const keys = required.filter((k): k is string => typeof k === "string" && !!properties[k]);
+				const keys = required.filter(
+					(k): k is string =>
+						typeof k === "string" && Object.hasOwn(properties, k) && !!properties[k],
+				);
 				if (keys.length) {
 					ctx.usesWithRequired = true;
 					type = atom(`WithRequired<${type.text}, ${union(keys.map(literal)).text}>`);
@@ -692,19 +785,16 @@ function pathItem(ctx: Context, item: Json, path: string, location: Location): T
 		const operationPath = `${path}/${method}`;
 		let type: Type;
 		if ("$ref" in operation) {
-			type = refType(ctx, operation.$ref, at(operationLocation, "$ref"));
+			type = refType(ctx, operation.$ref, at(operationLocation, "$ref"), "operation");
 		} else {
+			// An operation's parameter replaces the path item's one with the same name and location.
 			const merged = new Map<string, LocatedParameter>();
 			for (const entry of [
 				...shared,
 				...locatedList(operation.parameters, at(operationLocation, "parameters")),
 			]) {
-				const resolved =
-					isObject(entry.parameter) && "$ref" in entry.parameter
-						? resolveRefLoosely(ctx.doc, entry.parameter.$ref)
-						: entry.parameter;
-				const r = isObject(resolved) ? resolved : {};
-				merged.set(`${String(r.in)}-${String(r.name)}`, entry);
+				const resolved = resolveParameter(ctx, entry);
+				if (resolved) merged.set(nodeKey(resolved.in as string, resolved.name as string), entry);
 			}
 			const parameters = [...merged.values()];
 			const id = operation.operationId;
@@ -721,10 +811,10 @@ function pathItem(ctx: Context, item: Json, path: string, location: Location): T
 				operationMembers(ctx, operation, parameters, operationPath, operationLocation),
 			);
 			if (typeof id === "string" && id && !firstUse) {
+				// Upstream replaces "#" with "/" here, so "a#b" and "a/b" collide; inspex keeps the operationId.
 				ctx.operationIds.set(id, at(operationLocation, "operationId"));
-				const key = id.replaceAll("#", "/");
-				ctx.operations.push(`${propertyKey(key)}: ${operationType.text};`);
-				type = atom(`operations[${JSON.stringify(key)}]`);
+				ctx.operations.push(`${propertyKey(id)}: ${operationType.text};`);
+				type = atom(`operations[${JSON.stringify(id)}]`);
 			} else {
 				type = operationType;
 			}
@@ -753,7 +843,7 @@ function operationMembers(
 		const bodyLocation = at(location, "requestBody");
 		const type =
 			"$ref" in body
-				? refType(ctx, body.$ref, at(bodyLocation, "$ref"))
+				? refType(ctx, body.$ref, at(bodyLocation, "$ref"), "requestBodies")
 				: requestBodyType(ctx, body, `${path}/requestBody`, bodyLocation);
 		const resolved = "$ref" in body ? resolveRefLoosely(ctx.doc, body.$ref) : body;
 		const required = isObject(resolved) && !!resolved.required;
@@ -768,37 +858,59 @@ function operationMembers(
 	return members;
 }
 
+/**
+ * The parameter object an entry stands for, or undefined after reporting why it is left out: an
+ * unresolved `$ref`, or no string `name` and `in` of query, header, path or cookie.
+ */
+function resolveParameter(
+	ctx: Context,
+	{ parameter, location }: LocatedParameter,
+): Json | undefined {
+	let resolved = parameter;
+	if (isObject(parameter) && "$ref" in parameter) {
+		resolved = resolveRefLoosely(ctx.doc, parameter.$ref);
+		if (!isObject(resolved)) {
+			refType(ctx, parameter.$ref, at(location, "$ref"), "parameters");
+			return undefined;
+		}
+	}
+	if (!isObject(resolved)) {
+		report(ctx, location, ProblemCode.InvalidValue, "Expected a parameter object; left out");
+		return undefined;
+	}
+	if (
+		typeof resolved.name !== "string" ||
+		!parameterLocations.includes(resolved.in as (typeof parameterLocations)[number])
+	) {
+		report(
+			ctx,
+			location,
+			ProblemCode.InvalidValue,
+			'A parameter needs a string "name" and an "in" of query, header, path or cookie; left out',
+		);
+		return undefined;
+	}
+	return resolved;
+}
+
 function parametersMember(ctx: Context, parameters: LocatedParameter[], path: string): string {
-	const resolved = parameters.map(({ parameter, location }) => {
-		if (isObject(parameter) && "$ref" in parameter) {
-			const target = resolveRefLoosely(ctx.doc, parameter.$ref);
-			if (!isObject(target)) refType(ctx, parameter.$ref, at(location, "$ref"));
-			return { parameter, location, resolved: isObject(target) ? target : undefined };
-		}
-		if (!isObject(parameter)) {
-			report(ctx, location, ProblemCode.InvalidValue, "Expected a parameter object; left out");
-		}
-		return { parameter, location, resolved: isObject(parameter) ? parameter : undefined };
+	const resolved = parameters.flatMap((entry) => {
+		const p = resolveParameter(ctx, entry);
+		return p ? [{ ...entry, resolved: p }] : [];
 	});
 	const groups = parameterLocations.map((where) => {
 		const members: string[] = [];
 		let allOptional = true;
 		for (const { parameter, location, resolved: p } of resolved) {
-			if (p?.in !== where) continue;
+			if (p.in !== where) continue;
+			const name = p.name as string;
 			const optional = where !== "path" && !p.required;
 			allOptional &&= optional;
 			const type =
 				isObject(parameter) && "$ref" in parameter
-					? refType(ctx, parameter.$ref, at(location, "$ref"))
-					: parameterType(
-							ctx,
-							p,
-							`${path}/parameters/${where}/${escapePointer(String(p.name))}`,
-							location,
-						);
-			members.push(
-				`${jsDoc(p)}${propertyKey(String(p.name))}${optional ? "?" : ""}: ${type.text};`,
-			);
+					? refType(ctx, parameter.$ref, at(location, "$ref"), "parameters")
+					: parameterType(ctx, p, `${path}/parameters/${where}/${escapePointer(name)}`, location);
+			members.push(`${jsDoc(p)}${propertyKey(name)}${optional ? "?" : ""}: ${type.text};`);
 		}
 		return `${where}${allOptional ? "?" : ""}: ${members.length ? objectType(members).text : "never"};`;
 	});
@@ -862,7 +974,7 @@ function responsesType(ctx: Context, responses: Json, path: string, location: Lo
 			);
 			type = UNKNOWN;
 		} else if ("$ref" in response) {
-			type = refType(ctx, response.$ref, at(responseLocation, "$ref"));
+			type = refType(ctx, response.$ref, at(responseLocation, "$ref"), "responses");
 		} else {
 			type = responseType(
 				ctx,
@@ -892,7 +1004,7 @@ function responseType(ctx: Context, response: Json, path: string, location: Loca
 				);
 				type = UNKNOWN;
 			} else if ("$ref" in header) {
-				type = refType(ctx, header.$ref, at(headerLocation, "$ref"));
+				type = refType(ctx, header.$ref, at(headerLocation, "$ref"), "headers");
 				optional = false;
 			} else {
 				type = headerType(ctx, header, `${path}/headers/${escapePointer(name)}`, headerLocation);
@@ -918,72 +1030,142 @@ function headerType(ctx: Context, header: Json, path: string, location: Location
 	return UNKNOWN;
 }
 
-// `X: components["schemas"]["X"][] | string` is TS2502 (circular), because TypeScript resolves array
-// elements and union members eagerly; a type alias may refer to itself there. So component schemas on
-// such a cycle get a type alias, and references to them use it. Object members are resolved lazily,
-// so references inside `properties` and `additionalProperties` do not count.
-function recursiveSchemaAliases(schemas: Json): Map<string, string> {
-	const edges = new Map<string, Set<string>>();
-	for (const [name, schema] of Object.entries(schemas)) {
-		const refs = new Set<string>();
-		eagerSchemaRefs(schema, refs);
-		edges.set(name, refs);
+// TypeScript resolves union and intersection members, array elements and type alias targets eagerly, and
+// object members lazily. So components that refer to each other only through `$ref`s, unions and
+// intersections (`A: B; B: A`, or `C: C | string`) have no type (TS2502, TS2456): they are reported and
+// typed `unknown`. Through an array, recursion has a type, but not as an indexed access
+// (`X: components["schemas"]["X"][]` is TS2502): those schemas get a type alias, which may refer to itself
+// there, and references to them use it.
+function analyzeRefCycles(ctx: Context): void {
+	const components = isObject(ctx.doc.components) ? ctx.doc.components : {};
+	const direct = new Map<string, Set<string>>();
+	const eager = new Map<string, Set<string>>();
+	const names = new Map<string, { kind: ComponentKind; name: string }>();
+	for (const kind of componentKinds) {
+		const group = components[kind];
+		if (!isObject(group)) continue;
+		for (const [name, item] of Object.entries(group)) {
+			const node = nodeKey(kind, name);
+			names.set(node, { kind, name });
+			const directRefs = new Set<string>();
+			if (kind === "schemas") {
+				schemaRefs(ctx.doc, item, false, directRefs, new Set());
+				const eagerRefs = new Set<string>();
+				schemaRefs(ctx.doc, item, true, eagerRefs, new Set());
+				eager.set(node, eagerRefs);
+			} else if (isObject(item) && "$ref" in item) {
+				const target = componentOf(parsePointer(item.$ref));
+				if (target?.kind === kind) directRefs.add(nodeKey(kind, target.name));
+			}
+			direct.set(node, directRefs);
+		}
 	}
-	// Tarjan's strongly connected components; a node is on a cycle if its component has two nodes or a self-edge.
+	for (const cycle of cycles(direct)) {
+		const members = cycle.map((node) => names.get(node)?.name as string);
+		for (const node of cycle) {
+			const { kind, name } = names.get(node) as { kind: ComponentKind; name: string };
+			ctx.refCycles.add(node);
+			report(
+				ctx,
+				at(undefined, "components", kind, name),
+				ProblemCode.RefCycle,
+				`This component is on a $ref cycle with no object or array in between (${members.join(", ")}), so it has no type; typed as unknown`,
+			);
+		}
+	}
+	const used = new Set<string>();
+	for (const cycle of cycles(eager)) {
+		for (const node of cycle) {
+			const name = names.get(node)?.name as string;
+			let alias = `$schema_${name.replaceAll(/[^\w$]/g, "_")}`;
+			while (used.has(alias)) alias += "_";
+			used.add(alias);
+			ctx.schemaAliases.set(name, alias);
+		}
+	}
+}
+
+/**
+ * Adds the component schemas `schema` refers to eagerly: through `$ref`s (following those into other
+ * schemas, which are inlined), unions and intersections, and with `throughArrays` also array items.
+ */
+function schemaRefs(
+	doc: Json,
+	schema: unknown,
+	throughArrays: boolean,
+	out: Set<string>,
+	inlined: Set<string>,
+): void {
+	if (!isObject(schema)) return;
+	if ("$ref" in schema) {
+		const pointer = parsePointer(schema.$ref);
+		const component = componentOf(pointer);
+		if (component?.kind === "schemas") out.add(nodeKey("schemas", component.name));
+		else if (pointer && !component && reachesSchema(doc, pointer)) {
+			const key = pointer.join("\0");
+			if (inlined.has(key)) return;
+			inlined.add(key);
+			schemaRefs(doc, resolvePointer(doc, pointer), throughArrays, out, inlined);
+		}
+		return;
+	}
+	// As in `schemaType`: a constant or an enum has no references.
+	if (schema.const !== null && schema.const !== undefined) return;
+	if (
+		Array.isArray(schema.enum) &&
+		schema.type !== "object" &&
+		!("properties" in schema) &&
+		!("additionalProperties" in schema)
+	) {
+		return;
+	}
+	const keys = throughArrays
+		? ["allOf", "anyOf", "oneOf", "prefixItems", "items"]
+		: ["allOf", "anyOf", "oneOf"];
+	for (const key of keys) {
+		const value = schema[key];
+		for (const item of Array.isArray(value) ? value : [value]) {
+			schemaRefs(doc, item, throughArrays, out, inlined);
+		}
+	}
+}
+
+/** Strongly connected components that are cycles (two nodes or more, or a self-reference), by Tarjan. */
+function cycles(edges: Map<string, Set<string>>): string[][] {
 	const index = new Map<string, number>();
 	const low = new Map<string, number>();
 	const stack: string[] = [];
 	const onStack = new Set<string>();
-	const recursive: string[] = [];
-	const visit = (name: string): void => {
-		index.set(name, index.size);
-		low.set(name, index.get(name) as number);
-		stack.push(name);
-		onStack.add(name);
-		for (const next of edges.get(name) ?? []) {
+	const out: string[][] = [];
+	const order = new Map([...edges.keys()].map((node, i) => [node, i]));
+	const visit = (node: string): void => {
+		index.set(node, index.size);
+		low.set(node, index.get(node) as number);
+		stack.push(node);
+		onStack.add(node);
+		for (const next of edges.get(node) ?? []) {
 			if (!edges.has(next)) continue;
 			if (!index.has(next)) {
 				visit(next);
-				low.set(name, Math.min(low.get(name) as number, low.get(next) as number));
+				low.set(node, Math.min(low.get(node) as number, low.get(next) as number));
 			} else if (onStack.has(next)) {
-				low.set(name, Math.min(low.get(name) as number, index.get(next) as number));
+				low.set(node, Math.min(low.get(node) as number, index.get(next) as number));
 			}
 		}
-		if (low.get(name) !== index.get(name)) return;
+		if (low.get(node) !== index.get(node)) return;
 		const component: string[] = [];
 		let member: string | undefined;
 		do {
 			member = stack.pop() as string;
 			onStack.delete(member);
 			component.push(member);
-		} while (member !== name);
-		if (component.length > 1 || edges.get(name)?.has(name)) recursive.push(...component);
-	};
-	for (const name of edges.keys()) if (!index.has(name)) visit(name);
-	const aliases = new Map<string, string>();
-	const used = new Set<string>();
-	for (const name of recursive) {
-		let alias = `$schema_${name.replaceAll(/[^\w$]/g, "_")}`;
-		while (used.has(alias)) alias += "_";
-		used.add(alias);
-		aliases.set(name, alias);
-	}
-	return aliases;
-}
-
-function eagerSchemaRefs(schema: unknown, out: Set<string>): void {
-	if (!isObject(schema)) return;
-	if ("$ref" in schema) {
-		const pointer = typeof schema.$ref === "string" ? parsePointer(schema.$ref) : undefined;
-		if (pointer?.length === 3 && pointer[0] === "components" && pointer[1] === "schemas") {
-			out.add(pointer[2] as string);
+		} while (member !== node);
+		if (component.length > 1 || edges.get(node)?.has(node)) {
+			out.push(component.toSorted((a, b) => (order.get(a) as number) - (order.get(b) as number)));
 		}
-		return;
-	}
-	for (const key of ["allOf", "anyOf", "oneOf", "prefixItems", "items"]) {
-		const value = schema[key];
-		for (const item of Array.isArray(value) ? value : [value]) eagerSchemaRefs(item, out);
-	}
+	};
+	for (const node of edges.keys()) if (!index.has(node)) visit(node);
+	return out;
 }
 
 // Mirrors openapi-typescript's `scanDiscriminators`: it records every discriminator by the JSON pointer
@@ -1065,7 +1247,13 @@ function patchDiscriminatorEnum(
 		if (!isObject(schema.properties)) schema.properties = {};
 		if (!Array.isArray(schema.required)) schema.required = [propertyName];
 		else if (!schema.required.includes(propertyName)) schema.required.push(propertyName);
-		(schema.properties as Json)[propertyName] = property;
+		// Not `properties[name] = …`: for "__proto__" that sets the prototype (upstream's bug).
+		Object.defineProperty(schema.properties, propertyName, {
+			value: property,
+			enumerable: true,
+			writable: true,
+			configurable: true,
+		});
 		return true;
 	}
 	return false;

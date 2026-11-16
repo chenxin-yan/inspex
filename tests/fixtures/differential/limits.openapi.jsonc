@@ -1,0 +1,15 @@
+// Inherited limits, equal to upstream and pinned here (README "Limits"):
+// - a 3.1 `$ref` with sibling keywords ignores the siblings;
+// - `{ "const": null }` is `unknown` (not mutually assignable with `null`, so it stays as upstream has it).
+{
+	"openapi": "3.1.0",
+	"info": { "title": "limits", "version": "1" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"A": { "type": "object", "properties": { "id": { "type": "string" } } },
+			"RefWithSiblings": { "$ref": "#/components/schemas/A", "required": ["id"], "properties": { "name": { "type": "string" } } },
+			"ConstNull": { "const": null }
+		}
+	}
+}

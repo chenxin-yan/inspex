@@ -12,7 +12,14 @@
 					"201": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "./other.json#/Thing" } } } }
 				}
 			}
-		}
+		},
+		"/d": {
+			"get": {
+				"parameters": [{ "$ref": "#/components/parameters/One" }, { "$ref": "#/components/parameters/Two" }],
+				"responses": {}
+			}
+		},
+		"/bad": 42
 	},
 	"components": {
 		"schemas": {

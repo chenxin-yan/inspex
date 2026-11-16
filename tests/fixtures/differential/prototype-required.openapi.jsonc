@@ -1,0 +1,14 @@
+// `required` names a property that the referenced schema does not have, but Object.prototype does.
+// Upstream looks it up through the prototype and emits `WithRequired<Base, "constructor">`, which does not
+// compile; inspex checks own properties only.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "prototype required", "version": "1" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"Base": { "type": "object", "properties": { "id": { "type": "string" } } },
+			"Ext": { "required": ["constructor"], "allOf": [{ "$ref": "#/components/schemas/Base" }] }
+		}
+	}
+}

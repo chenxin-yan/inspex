@@ -78,7 +78,7 @@
 		},
 		"/legacy": { "$ref": "#/components/pathItems/Legacy" },
 		"/ping#hash": {
-			"head": { "operationId": "ping#head", "responses": { "200": { "description": "ok" } } },
+			"head": { "operationId": "ping.head", "responses": { "200": { "description": "ok" } } },
 			"options": { "operationId": "1-starts-with-digit", "responses": { "200": { "description": "ok" } } },
 			"trace": { "operationId": "with space", "responses": { "200": { "description": "ok" } } }
 		}
