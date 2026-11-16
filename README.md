@@ -199,7 +199,7 @@ The types match openapi-typescript 7.13 (with `emptyObjectsUnknown: true`, with 
 Not tested:
 
 - editors and language servers (no editor was run against this package);
-- macOS and Windows locally (CI runs the end-to-end tests there); Linux with Node.js 22.0.0, 22.23.2 and 26.13.0;
+- platforms beyond these: Linux with Node.js 22.0.0, 22.23.2 and 26.13.0 (locally), and GitHub's `ubuntu-latest`, `macos-latest` and `windows-latest` runners with Node.js 26.13.0 (CI runs the end-to-end tests on all three);
 - `tsc --build`, `--incremental` and `--watch`, and projects that emit declarations (an earlier spike saw `TS18125` with `declaration: true`).
 
 ## Cost
