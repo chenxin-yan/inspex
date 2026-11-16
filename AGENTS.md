@@ -1,3 +1,16 @@
+## Layout
+
+```
+src/server.ts             the mapper process (bundle entry)
+src/jsonc.ts, problems.ts  JSONC parsing; what a format reports
+src/mapper/               protocol, framing, Mapper, options, cache
+src/formats/index.ts      formatOf: file name -> format
+src/formats/openapi/      index (entry, assembly) -> operations -> schema -> refs / type-text; analysis and all of them use context
+tests/fixtures/openapi/   compiler fixtures
+```
+
+Imports point one way (`src/imports.test.ts` checks it): `formats/` never imports `mapper/`; `mapper/` reaches a format only through `formats/index.ts`; in `formats/openapi/`, `analysis.ts` uses only `context.ts` and `refs.ts`, and `refs.ts` never imports `schema.ts`.
+
 ## Tests
 
 - Vitest via Vite+: `import { describe, expect, it, vi } from "vite-plus/test"`; `pnpm run test` (builds `dist/` first), or `pnpm exec vp test run [file]` after `pnpm run build`: the end-to-end tests in `tests/` run the 7.1 compiler on `tests/fixtures/openapi`, with `dist/server.js` as the content mapper.
