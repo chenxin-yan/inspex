@@ -35,6 +35,15 @@ and pass `--runExternalCode` to every `tsc` call; the flag cannot be set in `tsc
 { "scripts": { "check:types": "tsc --noEmit --runExternalCode" } }
 ```
 
+### Editors
+
+A content mapper is a program the compiler runs, so the opt-in never comes from `tsconfig.json`. An editor gives it in its own way:
+
+- VS Code: trust the workspace and grant the content mapper permission when asked.
+- Editors that start TypeScript's language server themselves (`tsc --lsp --stdio`): pass `runExternalCode: true` in the server's initialization options (Neovim: `init_options = { runExternalCode = true }` in that server's configuration).
+
+Without it the editor shows `Cannot find module './acme.openapi.jsonc'`.
+
 ### Options
 
 `options` in the `contentMappers` entry:
@@ -139,10 +148,10 @@ Generated declarations are cached in `node_modules/.cache/inspex` next to `tscon
 
 ## Limits
 
-- There is no fallback: where the mapper does not run, the import does not resolve. That is TypeScript 7.0 and older, 7.1 without `--runExternalCode`, editors in untrusted workspaces, and type-aware linters such as oxlint's tsgolint until they run content mappers.
+- There is no fallback: where the mapper does not run, the import does not resolve. That is TypeScript 7.0 and older, 7.1 without `--runExternalCode`, editors that have not allowed it ([Editors](#editors)), and type-aware linters such as oxlint's tsgolint until they run content mappers.
 - One file per spec: a `$ref` to another file or a URL is `unknown` and an error. YAML, OpenAPI 3.2 and Swagger 2.0 are not supported.
 - The types equal openapi-typescript's, except where its output is wrong or does not compile; there inspex emits the correct type, or `unknown` and an error at its place in the spec. A few constructs, such as a 3.1 `$ref` with sibling keywords, are ignored as openapi-typescript does.
-- Editors, `tsc --build`, `--watch` and declaration emit are not tested yet.
+- `tsc --build`, `--watch` and declaration emit are not tested yet, and no editor was run end to end (only TypeScript's language server).
 
 The diagnostics, every difference from openapi-typescript, what each keyword becomes, and the measured cost are in the [reference](https://github.com/chenxin-yan/inspex/blob/main/docs/reference.md).
 

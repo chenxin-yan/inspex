@@ -44,7 +44,7 @@ There is no fallback: where the mapper does not run, the import does not resolve
   src/app.ts(1,52): error TS2307: Cannot find module './acme.openapi.jsonc' or its corresponding type declarations.
   ```
   and refuses the flag: `error TS5023: Unknown compiler option '--runExternalCode'.`
-- Editors: VS Code passes `--runExternalCode` to TypeScript's language server only in trusted workspaces, and the mapper package must be inside the opened folder (from the TypeScript pull request and an earlier spike; not verified for this package).
+- Editors that have not allowed external code. TypeScript's language server (`tsc --lsp --stdio`, 7.1.0-beta) runs the mapper when the client passes `runExternalCode: true` in its initialization options: hovers show the spec's types and errors are reported as on the command line; without it the import is `TS2307`. VS Code asks for workspace trust and the content mapper permission instead (from the TypeScript 7.1 announcement; not run against this package).
 - Other type-aware tools (type-aware linters such as oxlint's tsgolint, older TypeScript) see the import as unresolved until they run content mappers.
 
 ## Differences from openapi-typescript
@@ -90,7 +90,7 @@ The types match openapi-typescript 7.13 (with `emptyObjectsUnknown: true`, with 
 
 Not tested:
 
-- editors and language servers (no editor was run against this package);
+- editors end to end (the language server was driven directly, with hover and diagnostics on one file; no editor was run against this package);
 - platforms beyond these: Linux with Node.js 26.13.0 (locally), and GitHub's `ubuntu-latest`, `macos-latest` and `windows-latest` runners with Node.js 26.13.0 (CI runs the end-to-end tests on all three);
 - `tsc --build`, `--incremental` and `--watch`, and projects that emit declarations (an earlier spike saw `TS18125` with `declaration: true`).
 
