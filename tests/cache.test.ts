@@ -67,8 +67,7 @@ afterAll(() => rmSync(project, { recursive: true, force: true }));
 it(
 	"reuses an entry on the next run, regenerates after an edit, and ignores an altered or corrupt entry",
 	() => {
-		const first = tsc(project, ["-p", ".", "--runExternalCode"]);
-		expect(first.lines).toEqual([]);
+		expect(tsc(project, ["-p", ".", "--runExternalCode"], 0)).toEqual([]);
 		const [entry] = entries();
 		expect(entries()).toHaveLength(1);
 
@@ -76,7 +75,7 @@ it(
 		const file = join(cache, entry as string);
 		const longAgo = new Date("2000-01-01T00:00:00Z");
 		utimesSync(file, longAgo, longAgo);
-		expect(tsc(project, ["-p", ".", "--runExternalCode"]).lines).toEqual([]);
+		expect(tsc(project, ["-p", ".", "--runExternalCode"], 0)).toEqual([]);
 		expect(statSync(file).mtime).toEqual(longAgo);
 
 		// An entry whose declarations were altered, though it still parses, is regenerated.
@@ -88,7 +87,7 @@ it(
 				"export type cacheHit = true;\\nexport interface operations",
 			),
 		);
-		expect(tsc(project, ["-p", "tsconfig.probe.json", "--runExternalCode"]).lines).toEqual([
+		expect(tsc(project, ["-p", "tsconfig.probe.json", "--runExternalCode"], 2)).toEqual([
 			`probe.ts(1,15): error TS2305: Module '"./acme.openapi.jsonc"' has no exported member 'cacheHit'.`,
 		]);
 		expect(readFileSync(file, "utf8")).not.toContain("cacheHit");
@@ -98,13 +97,13 @@ it(
 			join(project, "acme.openapi.jsonc"),
 			spec(`"Id": { "type": "string" }, "Other": {}`),
 		);
-		expect(tsc(project, ["-p", ".", "--runExternalCode"]).lines).toEqual([]);
+		expect(tsc(project, ["-p", ".", "--runExternalCode"], 0)).toEqual([]);
 		const edited = entries().find((f) => f !== entry) as string;
 		expect(entries()).toHaveLength(2);
 
 		// A corrupt entry is ignored and replaced.
 		writeFileSync(join(cache, edited), "{ not json");
-		expect(tsc(project, ["-p", ".", "--runExternalCode"]).lines).toEqual([]);
+		expect(tsc(project, ["-p", ".", "--runExternalCode"], 0)).toEqual([]);
 		expect(readFileSync(join(cache, edited), "utf8")).toContain("Other: unknown;");
 	},
 	tscTimeout * 4,

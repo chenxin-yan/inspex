@@ -368,18 +368,31 @@ export type KeysSame<A, B, Depth extends unknown[] = []> = Depth["length"] exten
 				files: included,
 			});
 		writeFileSync(join(work, "tsconfig.json"), config(["diff.ts", ...files]));
-		const result = tsc(work, ["-p", "."]);
-		// Upstream defects in large specs that are not committed are reported, not failed.
-		const upstreamDefects = result.lines.filter((l) => extraTheirs.has(l.slice(0, l.indexOf("("))));
+		// Status 2 only with errors, and errors only in upstream's output for large specs that are not
+		// committed: those are reported, not failed.
+		const lines = tsc(work, ["-p", "."], extraSpecs.length ? [0, 2] : 0);
+		const upstreamDefects = lines.filter((l) => extraTheirs.has(l.slice(0, l.indexOf("("))));
 		if (upstreamDefects.length)
 			console.log(`upstream's own errors:\n${upstreamDefects.join("\n")}`);
-		expect.soft(result.lines.filter((l) => !upstreamDefects.includes(l))).toEqual([]);
+		expect.soft(lines.filter((l) => !upstreamDefects.includes(l))).toEqual([]);
 
 		// Upstream's text for the named differences fails to compile exactly where the table says so.
 		writeFileSync(join(work, "upstream", "tsconfig.json"), config(upstreamFiles));
-		const upstream = tsc(join(work, "upstream"), ["-p", "."]);
-		const failing = new Set(upstream.lines.map((l) => l.slice(0, l.indexOf("("))).filter(Boolean));
+		const upstream = tsc(join(work, "upstream"), ["-p", "."], upstreamExpectedToFail.size ? 2 : 0);
+		const failing = new Set(upstream.map((l) => l.slice(0, l.indexOf("("))).filter(Boolean));
 		expect([...failing].toSorted(byText)).toEqual([...upstreamExpectedToFail].toSorted(byText));
 	},
 	tscTimeout * 3,
 );
+
+it("fails, rather than passing as clean, when the compiler does not start", () => {
+	writeFileSync(join(work, "tsconfig.json"), JSON.stringify({ files: [] }));
+	const options = process.env.NODE_OPTIONS;
+	process.env.NODE_OPTIONS = `--require=${join(work, "missing-startup-hook.cjs")}`;
+	try {
+		expect(() => tsc(work, ["-p", "."], 0)).toThrow(/ended with status 1/);
+	} finally {
+		if (options === undefined) delete process.env.NODE_OPTIONS;
+		else process.env.NODE_OPTIONS = options;
+	}
+});

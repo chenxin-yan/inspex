@@ -10,17 +10,20 @@ const require = createRequire(import.meta.url);
 /** `typescript` is the 7.1 compiler the mapper needs; `typescript-7.0` shows what happens without it. */
 export type Compiler = "typescript" | "typescript-7.0";
 
-export interface TscResult {
-	status: number | null;
-	/** Output lines, with paths relative to the working directory as tsc prints them. */
-	lines: string[];
-	stderr: string;
-}
-
 // Spawning tsc and its mapper process takes a few hundred ms locally; a loaded CI host can be 20x slower.
 export const tscTimeout = 60_000;
 
-export function tsc(cwd: string, args: string[], compiler: Compiler = "typescript"): TscResult {
+/**
+ * Runs tsc and returns its output lines, with paths relative to `cwd` as tsc prints them. Throws, with
+ * the whole output, unless tsc ran to completion with an expected `status` and wrote nothing to stderr:
+ * a compiler that does not start also prints no diagnostics, and must not pass for a clean run.
+ */
+export function tsc(
+	cwd: string,
+	args: string[],
+	status: number | number[],
+	compiler: Compiler = "typescript",
+): string[] {
 	const bin = join(dirname(require.resolve(`${compiler}/package.json`)), "bin", "tsc");
 	const result = spawnSync(process.execPath, [bin, ...args, "--pretty", "false"], {
 		cwd,
@@ -28,11 +31,13 @@ export function tsc(cwd: string, args: string[], compiler: Compiler = "typescrip
 		timeout: tscTimeout,
 	});
 	if (result.error) throw result.error;
-	return {
-		status: result.status,
-		lines: result.stdout.split(/\r?\n/).filter(Boolean),
-		stderr: result.stderr,
-	};
+	const expected = typeof status === "number" ? [status] : status;
+	if (result.signal !== null || !expected.includes(result.status as number) || result.stderr) {
+		throw new Error(
+			`tsc ${args.join(" ")} in ${cwd} ended with status ${result.status} and signal ${result.signal}, expected status ${expected.join(" or ")} and no stderr.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+		);
+	}
+	return result.stdout.split(/\r?\n/).filter(Boolean);
 }
 
 /**
