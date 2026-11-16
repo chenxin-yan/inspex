@@ -32,6 +32,7 @@ describe("a spec imported with import type", () => {
 			expect(lines).toEqual([
 				"src/app.ts(11,44): error TS2353: Object literal may only specify known properties, and 'nmae' does not exist in type '{ id: string; name: string; settings?: $schema_JsonValue | undefined; }'.",
 				"src/app.ts(12,64): error TS2322: Type '() => number' is not assignable to type '$schema_JsonValue | undefined'.",
+				"src/fetch.ts(13,26): error TS2339: Property 'nmae' does not exist on type '{ id: string; name: string; settings?: $schema_JsonValue | undefined; }'.",
 			]);
 		},
 		tscTimeout,

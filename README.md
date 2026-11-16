@@ -1,6 +1,6 @@
 # inspex
 
-Import an OpenAPI document in TypeScript and get its types, with no generation step. `inspex` is a [TypeScript 7.1 content mapper](https://devblogs.microsoft.com/typescript/announcing-typescript-7-1-beta/#content-mappers): the compiler hands it `acme.openapi.jsonc` and gets back `paths`, `components` and `operations` in the shapes [openapi-typescript](https://openapi-ts.dev) emits, so `openapi-fetch` and similar tools work unchanged.
+Import an OpenAPI document in TypeScript and get its types, with no generation step. `inspex` is a [TypeScript 7.1 content mapper](https://devblogs.microsoft.com/typescript/announcing-typescript-7-1-beta/#content-mappers): the compiler hands it `acme.openapi.jsonc` and gets back `paths`, `components` and `operations` in the shapes [openapi-typescript](https://openapi-ts.dev) emits. inspex emits types only and has no runtime code: use the types directly, or with any tool that accepts openapi-typescript's `paths`.
 
 > [!WARNING]
 > Content mappers need TypeScript 7.1, which is in beta. Where the mapper does not run, the import does not resolve: see [Limits](#limits).
@@ -48,19 +48,23 @@ Anything else in `options`, or a value of the wrong type, is an error at its pla
 
 ## What you can import
 
-Save the spec as `<name>.openapi.jsonc` and import its types:
+Save the spec as `<name>.openapi.jsonc` and import its types. With plain `fetch`:
 
 ```ts
-import type { components, operations, paths } from "./acme.openapi.jsonc";
+import type { components, paths } from "./acme.openapi.jsonc";
 
 type User = components["schemas"]["User"];
-type GetUserResponse = operations["getUser"]["responses"][200]["content"]["application/json"];
+type GetUserResponse = paths["/users/{id}"]["get"]["responses"][200]["content"]["application/json"];
 
-const user: User = { id: "1", nmae: "Ada" };
-//                            ~~~~ Object literal may only specify known properties, and 'nmae' does not exist in type '{ id: string; name: string; }'.
+const res = await fetch("https://api.acme.test/users/42");
+const user: User = await res.json();
+user.nmae;
+//   ~~~~ Property 'nmae' does not exist on type '{ id: string; name: string; }'.
 ```
 
-With [openapi-fetch](https://openapi-ts.dev/openapi-fetch/):
+`operations` holds the same types by operationId: `operations["getUser"]["responses"][200]`.
+
+The types work with anything that accepts openapi-typescript's `paths`; for example [openapi-fetch](https://openapi-ts.dev/openapi-fetch/), which inspex does not require:
 
 ```ts
 import createClient from "openapi-fetch";
