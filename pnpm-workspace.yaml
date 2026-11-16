@@ -1,0 +1,14 @@
+overrides:
+  # Vite plugins resolve the same Vite+ core that `vp pack` and `vp test` run on.
+  vite@*: npm:@voidzero-dev/vite-plus-core@1.4.0
+
+# Vite+ core has its own version, outside plugins' upstream `vite` peer ranges.
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
+
+# Dependency install scripts stay blocked; this platform binary resolves through optionalDependencies.
+allowBuilds:
+  esbuild: false

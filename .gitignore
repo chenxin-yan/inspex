@@ -1,0 +1,27 @@
+# Dependencies
+node_modules
+
+# Local env files
+.env
+.env.local
+
+# Build outputs
+dist
+*.tgz
+*.tsbuildinfo
+
+# Testing
+coverage
+*.lcov
+
+# Caches
+.cache
+
+# Debug
+logs
+*.log
+
+# Misc
+.DS_Store
+.idea
+*.pem

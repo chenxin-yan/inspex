@@ -1,0 +1,62 @@
+{
+	"name": "inspex",
+	"version": "0.0.0",
+	"description": "TypeScript content mappers: import a spec file and get its types, with no generation step",
+	"type": "module",
+	"sideEffects": false,
+	"license": "MIT",
+	"author": "chenxin-yan",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/chenxin-yan/inspex.git"
+	},
+	"homepage": "https://github.com/chenxin-yan/inspex#readme",
+	"bugs": {
+		"url": "https://github.com/chenxin-yan/inspex/issues"
+	},
+	"keywords": [
+		"typescript",
+		"content-mapper",
+		"openapi",
+		"types",
+		"codegen"
+	],
+	"files": [
+		"dist"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "vp pack",
+		"dev": "vp pack --watch",
+		"lint": "vp lint",
+		"lint:fix": "vp lint --fix",
+		"format": "vp fmt --check",
+		"format:fix": "vp fmt",
+		"check": "vp check",
+		"check:fix": "vp check --fix",
+		"check:types": "tsc --noEmit",
+		"test": "vp test",
+		"changeset": "changeset",
+		"release:version": "changeset version && pnpm install --lockfile-only --ignore-scripts",
+		"release:pack": "node ./scripts/release.mjs --pack-dir",
+		"release:publish": "node ./scripts/release.mjs --publish-dir"
+	},
+	"devDependencies": {
+		"@arethetypeswrong/core": "^0.18.5",
+		"@changesets/changelog-github": "^1.0.1",
+		"@changesets/cli": "^3.0.3",
+		"@types/node": "^24.0.0",
+		"publint": "^0.3.25",
+		"typescript": "^7.0.2",
+		"vite-plus": "1.4.0"
+	},
+	"packageManager": "pnpm@12.16.1"
+}

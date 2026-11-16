@@ -1,0 +1,12 @@
+name: Setup
+description: Install the Node.js and pnpm that mise.toml and package.json pin, then the dependencies.
+
+runs:
+  using: composite
+  steps:
+    - name: Setup runtimes
+      uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

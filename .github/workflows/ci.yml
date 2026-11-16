@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_call:
+
+# A literal prefix: called from release.yml, github.workflow would name the caller and share its group.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Format, lint, and type check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Format and lint
+        run: pnpm run check
+
+      - name: Type check
+        run: pnpm run check:types
+
+      # publint and attw run in the build under CI, so a broken package shape fails here.
+      - name: Build
+        run: pnpm run build
+
+  test:
+    name: Test (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux runs every test. The other hosts run the tests tagged for them
+          # (`@module-tag windows` / `macos`), so the test files decide, not this workflow.
+          - os: ubuntu-latest
+            label: Linux
+            tags: ""
+          - os: macos-latest
+            label: macOS
+            tags: --tags-filter macos
+          - os: windows-latest
+            label: Windows
+            tags: --tags-filter windows
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Test
+        run: pnpm run test ${{ matrix.tags }}
+
+  # The one check to require on main. A job skipped because one it needs failed counts as
+  # passing for a required check, so this one always runs and fails unless all of them succeeded.
+  passed:
+    name: CI passed
+    if: always()
+    needs: [check, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless every job succeeded
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1

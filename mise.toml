@@ -1,0 +1,6 @@
+[settings]
+# pnpm comes from package.json#packageManager.
+idiomatic_version_file_enable_tools = ["pnpm"]
+
+[tools]
+node = "26.13.0"
