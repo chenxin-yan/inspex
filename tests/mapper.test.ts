@@ -1,5 +1,5 @@
 /**
- * Runs the TypeScript 7.1 compiler with `--runExternalCode` on the projects in tests/fixtures, with inspex
+ * Runs the TypeScript 7.1 compiler with `--runExternalCode` on the projects in tests/fixtures/openapi, with inspex
  * (dist/server.js) as their content mapper.
  *
  * @module-tag windows

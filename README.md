@@ -160,7 +160,7 @@ pnpm run test          # build dist/, then the tests
 pnpm run build         # build dist/
 ```
 
-The end-to-end tests run the compiler on the projects in `tests/fixtures`, with `dist/server.js` as their mapper; `pnpm exec vp test run <file>` needs a build first. `openapi-typescript` is a development dependency only, the oracle of `tests/differential.test.ts`; set `INSPEX_DIFFERENTIAL_SPECS` to compare more specs.
+The end-to-end tests run the compiler on the projects in `tests/fixtures/openapi`, with `dist/server.js` as their mapper; `pnpm exec vp test run <file>` needs a build first. `openapi-typescript` is a development dependency only, the oracle of `tests/differential.test.ts`; set `INSPEX_DIFFERENTIAL_SPECS` to compare more specs.
 
 Record user-visible changes with `pnpm run changeset`. Merging to `main` opens a release pull request; merging that publishes to npm.
 

@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 
 export const repoRoot: string = resolve(import.meta.dirname, "..");
-export const fixturesDir: string = join(repoRoot, "tests", "fixtures");
+export const fixturesDir: string = join(repoRoot, "tests", "fixtures", "openapi");
 
 const require = createRequire(import.meta.url);
 /** `typescript` is the 7.1 compiler the mapper needs; `typescript-7.0` shows what happens without it. */

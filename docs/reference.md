@@ -48,7 +48,7 @@ There is no fallback: where the mapper does not run, the import does not resolve
 
 ## Differences from openapi-typescript
 
-The types equal openapi-typescript 7's default output, except where that output is wrong or does not compile. There inspex emits the correct type, or `unknown` and an error. Each difference has a fixture in `tests/fixtures/differential` and is checked against openapi-typescript 7.13 in `tests/differential.test.ts`:
+The types equal openapi-typescript 7's default output, except where that output is wrong or does not compile. There inspex emits the correct type, or `unknown` and an error. Each difference has a fixture in `tests/fixtures/openapi/differential` and is checked against openapi-typescript 7.13 in `tests/differential.test.ts`:
 
 - `{ "type": "object" }` without properties is `Record<string, unknown>`; openapi-typescript's `Record<string, never>` makes every read `never` (it offers this as `emptyObjectsUnknown`).
 - A spec without operationIds has an empty `operations` interface; openapi-typescript's `Record<string, never>` makes `operations["anything"]` compile as `never`.

@@ -222,7 +222,10 @@ it("exports the read/write helpers only with readWriteMarkers", () => {
 
 function fixture(name: string): unknown {
 	const parsed = parseJsonc(
-		readFileSync(join(import.meta.dirname, "..", "tests", "fixtures", "generator", name), "utf8"),
+		readFileSync(
+			join(import.meta.dirname, "..", "tests", "fixtures", "openapi", "generator", name),
+			"utf8",
+		),
 	);
 	if (!parsed.ok) throw new Error(parsed.error.message);
 	return parsed.value;

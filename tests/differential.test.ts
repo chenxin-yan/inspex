@@ -1,6 +1,6 @@
 /**
  * Compares inspex's declarations with openapi-typescript's (the test oracle) for every spec in
- * tests/fixtures/differential, with and without `readWriteMarkers`: the 7.1 compiler must find `paths`,
+ * tests/fixtures/openapi/differential, with and without `readWriteMarkers`: the 7.1 compiler must find `paths`,
  * `components` and `operations` mutually assignable, member by member, with the same key types.
  *
  * inspex differs from upstream only where upstream's output is wrong or does not compile. Each such spec is
@@ -225,7 +225,7 @@ const normalize = (text: string): string =>
 		.replaceAll(/\s+/g, " ")
 		.trim();
 
-/** Every other spec in tests/fixtures, for the compile guard. */
+/** Every other spec in tests/fixtures/openapi, for the compile guard. */
 function guardSpecs(): string[] {
 	const out: string[] = [];
 	const visit = (directory: string): void => {
