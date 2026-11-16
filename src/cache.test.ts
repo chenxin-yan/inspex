@@ -2,6 +2,7 @@
  * @module-tag windows
  * @module-tag macos
  */
+import { createHash } from "node:crypto";
 import {
 	mkdirSync,
 	mkdtempSync,
@@ -55,9 +56,40 @@ it("ignores an entry whose declarations were altered but still parse", () => {
 	const spec = { text: "export interface paths {}\n", problems: [] };
 	writeCache(directory, "altered", spec);
 	const file = join(directory, "altered.json");
-	const entry = JSON.parse(readFileSync(file, "utf8"));
-	writeFileSync(file, JSON.stringify({ ...entry, text: `${spec.text}export type planted = 1;\n` }));
+	writeFileSync(
+		file,
+		readFileSync(file, "utf8").replace("export interface paths {}", "export type planted = 1;"),
+	);
 	expect(readCache(directory, "altered")).toBeUndefined();
+});
+
+it("checks the stored text itself, so even an equivalent re-serialization is a miss", () => {
+	writeCache(directory, "spaced", { text: "export {};\n", problems: [] });
+	const file = join(directory, "spaced.json");
+	const stored = readFileSync(file, "utf8");
+	const end = stored.lastIndexOf("}");
+	writeFileSync(file, `${stored.slice(0, end)} ${stored.slice(end)}`);
+	expect(readCache(directory, "spaced")).toBeUndefined();
+});
+
+it("treats a deeply nested payload as a miss, whatever its checksum", () => {
+	const deep = `${"[".repeat(20_000)}${"]".repeat(20_000)}`;
+	writeCache(directory, "deep", { text: "export {};\n", problems: [] });
+	const file = join(directory, "deep.json");
+	const [header] = readFileSync(file, "utf8").split("\n");
+	const entry = JSON.parse(header as string);
+	writeFileSync(
+		file,
+		`${JSON.stringify({ ...entry, checksum: "wrong" })}\n{"text":null,"problems":${deep}}`,
+	);
+	expect(readCache(directory, "deep")).toBeUndefined();
+	const sha = createHash("sha256");
+	const payload = `{"text":null,"problems":${deep}}`;
+	writeFileSync(
+		file,
+		`${JSON.stringify({ ...entry, checksum: sha.update(payload).digest("hex") })}\n${payload}`,
+	);
+	expect(readCache(directory, "deep")).toBeUndefined();
 });
 
 it.each([

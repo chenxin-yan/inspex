@@ -2,7 +2,7 @@
  * @module-tag windows
  * @module-tag macos
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -98,6 +98,36 @@ describe("transform", () => {
 		expect(message?.messageText).toContain(first.replaceAll("\\", "/"));
 		expect(message?.messageText).toContain(second.replaceAll("\\", "/"));
 		expect(result.supplemental?.[0]?.text).toBe("export {};\n");
+	});
+
+	it("regenerates over a cache entry that cannot be read back, and replaces it", () => {
+		const project = join(work, "deep-entry");
+		const cache = join(project, "node_modules", ".cache", "inspex");
+		mkdirSync(project, { recursive: true });
+		const mapper = new Mapper("test");
+		mapper.openProject({
+			configFileName: join(project, "tsconfig.json"),
+			projectHandle: "q",
+			compilerOptions: {},
+		});
+		const params = {
+			fileName: join(project, "a.openapi.jsonc"),
+			content: spec,
+			projectHandle: "q",
+		};
+		const first = mapper.transform(params);
+		const [entry] = readdirSync(cache);
+		const deep = `${"[".repeat(20_000)}${"]".repeat(20_000)}`;
+		// The entry's own key, a wrong checksum and a payload too deep to walk recursively.
+		const { key } = JSON.parse(
+			readFileSync(join(cache, entry as string), "utf8").split("\n")[0] as string,
+		);
+		writeFileSync(
+			join(cache, entry as string),
+			`{"key":${JSON.stringify(key)},"checksum":"wrong","text":null,"problems":${deep}}`,
+		);
+		expect(mapper.transform(params)).toEqual(first);
+		expect(readFileSync(join(cache, entry as string), "utf8")).not.toContain("[[[");
 	});
 
 	it("reports a file whose name has no known format", () => {

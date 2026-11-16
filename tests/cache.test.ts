@@ -80,10 +80,13 @@ it(
 		expect(statSync(file).mtime).toEqual(longAgo);
 
 		// An entry whose declarations were altered, though it still parses, is regenerated.
-		const cached = JSON.parse(readFileSync(file, "utf8"));
+		// The declarations are stored as a JSON string, where a line break is a backslash and an "n".
 		writeFileSync(
 			file,
-			JSON.stringify({ ...cached, text: `${cached.text}export type cacheHit = true;\n` }),
+			readFileSync(file, "utf8").replace(
+				"export interface operations",
+				"export type cacheHit = true;\\nexport interface operations",
+			),
 		);
 		expect(tsc(project, ["-p", "tsconfig.probe.json", "--runExternalCode"]).lines).toEqual([
 			`probe.ts(1,15): error TS2305: Module '"./acme.openapi.jsonc"' has no exported member 'cacheHit'.`,
@@ -102,7 +105,7 @@ it(
 		// A corrupt entry is ignored and replaced.
 		writeFileSync(join(cache, edited), "{ not json");
 		expect(tsc(project, ["-p", ".", "--runExternalCode"]).lines).toEqual([]);
-		expect(JSON.parse(readFileSync(join(cache, edited), "utf8")).text).toContain("Other: unknown;");
+		expect(readFileSync(join(cache, edited), "utf8")).toContain("Other: unknown;");
 	},
 	tscTimeout * 4,
 );
