@@ -27,13 +27,9 @@ export function parseJsonc(text: string): JsoncResult {
  * or returns undefined for an unterminated string or block comment.
  */
 export function stripJsonc(text: string): string | undefined {
-	let out = "";
-	let copied = 0;
+	// Ranges to blank, in text order: a trailing comma is found only after the comments behind it.
+	const blanks: [number, number][] = [];
 	let pendingComma = -1;
-	const blank = (start: number, end: number): void => {
-		out += text.slice(copied, start) + text.slice(start, end).replace(/[^\r\n]/g, " ");
-		copied = end;
-	};
 	for (let i = 0; i < text.length; i++) {
 		const c = text.charCodeAt(i);
 		if (c === 0x22 /* " */) {
@@ -42,21 +38,28 @@ export function stripJsonc(text: string): string | undefined {
 			if (i < 0) return undefined;
 		} else if (c === 0x2f /* / */ && text.charCodeAt(i + 1) === 0x2f) {
 			const end = lineEnd(text, i);
-			blank(i, end);
+			blanks.push([i, end]);
 			i = end - 1;
 		} else if (c === 0x2f && text.charCodeAt(i + 1) === 0x2a /* * */) {
 			const close = text.indexOf("*/", i + 2);
 			if (close < 0) return undefined;
-			blank(i, close + 2);
+			blanks.push([i, close + 2]);
 			i = close + 1;
 		} else if (c === 0x2c /* , */) {
 			pendingComma = i;
 		} else if (c === 0x7d /* } */ || c === 0x5d /* ] */) {
-			if (pendingComma >= 0) blank(pendingComma, pendingComma + 1);
+			if (pendingComma >= 0) blanks.push([pendingComma, pendingComma + 1]);
 			pendingComma = -1;
 		} else if (!isWhitespace(c)) {
 			pendingComma = -1;
 		}
+	}
+	blanks.sort((a, b) => a[0] - b[0]);
+	let out = "";
+	let copied = 0;
+	for (const [start, end] of blanks) {
+		out += text.slice(copied, start) + text.slice(start, end).replaceAll(/[^\r\n]/g, " ");
+		copied = end;
 	}
 	return out + text.slice(copied);
 }

@@ -79,10 +79,12 @@ export const operations: Diff<ours.operations, theirs.operations> = true;`;
 					join(work, `${stem}.check.ts`),
 					`import type * as ours from "./${stem}.ours.ts";
 import type * as theirs from "./${stem}.theirs.ts";
-import type { Diff } from "./diff.ts";
+import type { Diff, KeysSame } from "./diff.ts";
 export const paths: Diff<ours.paths, theirs.paths> = true;
 export const components: Diff<ours.components, theirs.components> = true;
 export const schemas: Diff<ours.components["schemas"], theirs.components["schemas"]> = true;
+export const pathsKeys: KeysSame<ours.paths, theirs.paths> = true;
+export const componentsKeys: KeysSame<ours.components, theirs.components> = true;
 ${check}
 `,
 				);
@@ -96,6 +98,21 @@ ${check}
 export type Diff<A, B> = [Same<A, B>] extends [true]
 	? true
 	: { [K in keyof A | keyof B]: K extends keyof A ? (K extends keyof B ? (Same<A[K], B[K]> extends true ? never : K) : K) : K }[keyof A | keyof B];
+/**
+ * Mutual assignability does not see key types: \`{ "200": X }\` and \`{ 200: X }\` are assignable both ways,
+ * but tools filter keys by type (openapi-fetch looks for numeric success statuses). So keys are compared too.
+ */
+export type KeysSame<A, B, Depth extends unknown[] = []> = Depth["length"] extends 12
+	? true
+	: [A] extends [object]
+		? [B] extends [object]
+			? Same<keyof A, keyof B> extends true
+				? false extends { [K in keyof A & keyof B]-?: KeysSame<A[K], B[K], [...Depth, 0]> }[keyof A & keyof B]
+					? false
+					: true
+				: false
+			: true
+		: true;
 `,
 		);
 		writeFileSync(

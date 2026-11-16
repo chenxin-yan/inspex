@@ -1,0 +1,43 @@
+// Acme's API, pinned 2026-11-16. JSONC: comments and trailing commas are allowed.
+{
+	"openapi": "3.1.0",
+	"info": { "title": "Acme", "version": "1.0.0" },
+	"paths": {
+		"/users/{id}": {
+			"get": {
+				"operationId": "getUser",
+				"parameters": [
+					{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+					/* optional */ { "name": "expand", "in": "query", "schema": { "type": "boolean" } },
+				],
+				"responses": {
+					"200": {
+						"description": "ok // not a comment, /* nor this */",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } },
+					},
+				},
+			},
+		},
+	},
+	"components": {
+		"schemas": {
+			"User": {
+				"type": "object",
+				"required": ["id", "name"],
+				"properties": {
+					"id": { "type": "string" },
+					"name": { "type": "string" },
+					"settings": { "$ref": "#/components/schemas/JsonValue" },
+				},
+			},
+			// Recursive through an array: a type alias in the output, not TS2502 or `any`.
+			"JsonValue": {
+				"anyOf": [
+					{ "type": "object", "additionalProperties": { "$ref": "#/components/schemas/JsonValue" } },
+					{ "type": "array", "items": { "$ref": "#/components/schemas/JsonValue" } },
+					{ "type": ["string", "number", "boolean", "null"] },
+				],
+			},
+		},
+	},
+}

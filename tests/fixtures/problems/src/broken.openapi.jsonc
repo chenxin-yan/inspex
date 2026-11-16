@@ -1,0 +1,22 @@
+{
+	"openapi": "3.1.0",
+	"info": { "title": "broken in parts", "version": "1" },
+	"paths": {
+		"/a": { "get": { "operationId": "same", "responses": { "200": { "description": "ok" } } } },
+		"/b": { "get": { "operationId": "same", "responses": { "200": { "description": "ok" } } } },
+		"/c": {
+			"get": {
+				"operationId": "getC",
+				"responses": {
+					"200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Missing" } } } },
+					"201": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "./other.json#/Thing" } } } }
+				}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"Good": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" }, "bad": { "$ref": "#/components/examples/X" } } }
+		}
+	}
+}

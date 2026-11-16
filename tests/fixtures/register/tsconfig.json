@@ -1,0 +1,12 @@
+{
+	"extends": "../tsconfig.base.json",
+	"compilerOptions": { "paths": { "fake-client": ["./fake-client/index.d.ts"] } },
+	"include": ["src"],
+	"contentMappers": [
+		{
+			"package": "inspex",
+			"extensions": [".openapi.jsonc"],
+			"options": { "register": { "module": "fake-client", "interface": "Specs" } }
+		}
+	]
+}

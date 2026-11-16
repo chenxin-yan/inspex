@@ -1,0 +1,17 @@
+{
+	"openapi": "3.0.3",
+	"info": { "title": "v3.0", "version": "1" },
+	"paths": {},
+	"components": {
+		"schemas": {
+			"Item": {
+				"type": "object",
+				"required": ["name", "price"],
+				"properties": {
+					"name": { "type": "string", "nullable": true },
+					"price": { "type": "number", "minimum": 0, "exclusiveMinimum": true }
+				}
+			}
+		}
+	}
+}

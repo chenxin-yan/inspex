@@ -1,13 +1,13 @@
 import { defineConfig } from "vite-plus";
 
-const ignorePatterns = [".changeset/", "**/CHANGELOG.md"];
+const ignorePatterns = [".changeset/", "**/CHANGELOG.md", "**/tests/fixtures/"];
 
 export default defineConfig({
 	fmt: {
 		useTabs: true,
 		sortImports: true,
 		sortPackageJson: false,
-		ignorePatterns: [...ignorePatterns, "**/tests/fixtures/"],
+		ignorePatterns,
 	},
 	lint: {
 		options: {

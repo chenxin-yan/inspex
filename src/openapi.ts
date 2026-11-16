@@ -110,7 +110,10 @@ function objectType(members: string[]): Type {
 
 const identifier = /^[A-Za-z_$][\w$]*$/;
 function propertyKey(name: string): string {
-	return identifier.test(name) ? name : JSON.stringify(name);
+	// Numeric keys stay numeric, as upstream prints them: `keyof { 200: X }` is `200`, not `"200"`, and
+	// openapi-fetch finds success responses by numeric status.
+	const numeric = String(Number(name)) === name && !name.startsWith("-");
+	return numeric || identifier.test(name) ? name : JSON.stringify(name);
 }
 
 function literal(value: unknown): Type {
