@@ -8,7 +8,7 @@ Import an OpenAPI document in TypeScript and get its types, with no generation s
 ## Requirements
 
 - TypeScript 7.1 or later (today `typescript@beta`, 7.1.0-beta), run with `--runExternalCode`.
-- Node.js 22 or later on `PATH`: the compiler starts the mapper with `node`.
+- Node.js 26 or later on `PATH`: the compiler starts the mapper with `node`.
 
 `inspex` has no dependencies; TypeScript is its only peer dependency.
 
@@ -217,7 +217,7 @@ The types match openapi-typescript 7.13 (with `emptyObjectsUnknown: true`, with 
 Not tested:
 
 - editors and language servers (no editor was run against this package);
-- platforms beyond these: Linux with Node.js 22.0.0, 22.23.2 and 26.13.0 (locally), and GitHub's `ubuntu-latest`, `macos-latest` and `windows-latest` runners with Node.js 26.13.0 (CI runs the end-to-end tests on all three);
+- platforms beyond these: Linux with Node.js 26.13.0 (locally), and GitHub's `ubuntu-latest`, `macos-latest` and `windows-latest` runners with Node.js 26.13.0 (CI runs the end-to-end tests on all three);
 - `tsc --build`, `--incremental` and `--watch`, and projects that emit declarations (an earlier spike saw `TS18125` with `declaration: true`).
 
 ## Cost

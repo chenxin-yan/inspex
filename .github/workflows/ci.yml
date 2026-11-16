@@ -61,29 +61,12 @@ jobs:
       - name: Test
         run: pnpm run test ${{ matrix.tags }}
 
-  # package.json declares engines.node >=22; the other jobs run the Node in mise.toml. This one runs every
-  # test, and so the mapper processes they start, on the oldest supported Node.
-  test-node-22:
-    name: Test (Linux, Node 22.0.0)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/setup
-
-      - name: Test
-        run: mise exec node@22.0.0 -- pnpm run test
-
   # The one check to require on main. A job skipped because one it needs failed counts as
   # passing for a required check, so this one always runs and fails unless all of them succeeded.
   passed:
     name: CI passed
     if: always()
-    needs: [check, test, test-node-22]
+    needs: [check, test]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
