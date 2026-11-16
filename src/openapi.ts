@@ -318,8 +318,8 @@ interface Context {
 	/** Pointers of schemas being inlined (`$ref`s into schemas), to stop at a cycle. */
 	inlining: Set<string>;
 	/**
-	 * Component schemas with their own shape beside composition `$ref`s back into their cycle: those
-	 * `$ref`s add nothing (A = {x} & A is just {x}) and are left out.
+	 * Component schemas with their own shape beside composition `$ref`s to themselves: those `$ref`s add
+	 * nothing (A = {x} & A is just {x}) and are left out.
 	 */
 	effectiveSchemas: Map<string, Json>;
 	/** Property keys of the type emitted for each component schema (see `emittedKeys`). */
@@ -1129,8 +1129,9 @@ function analyzeRefCycles(ctx: Context): void {
 		}
 	}
 	const schemas = isObject(components.schemas) ? components.schemas : {};
+	// A = { x } & A is just { x }: a shaped schema's composition $refs to itself are left out. A cycle
+	// through other components stays one: leaving those out would lose their members.
 	for (const cycle of cycles(direct)) {
-		const inCycle = new Set(cycle);
 		for (const node of cycle) {
 			const { kind, name } = names.get(node) as { kind: ComponentKind; name: string };
 			const schema = schemas[name];
@@ -1140,7 +1141,7 @@ function analyzeRefCycles(ctx: Context): void {
 				if (!Array.isArray(schema[key])) continue;
 				const kept = (schema[key] as unknown[]).filter((member) => {
 					const target = isObject(member) ? componentOf(parsePointer(member.$ref)) : undefined;
-					return !(target?.kind === "schemas" && inCycle.has(nodeKey("schemas", target.name)));
+					return !(target?.kind === "schemas" && target.name === name);
 				});
 				if (kept.length) effective[key] = kept;
 				else delete effective[key];
@@ -1163,7 +1164,7 @@ function analyzeRefCycles(ctx: Context): void {
 				ctx,
 				at(undefined, "components", kind, name),
 				ProblemCode.RefCycle,
-				`This component is on a $ref cycle with no object or array in between (${members.join(", ")}), so it has no type; typed as unknown`,
+				`${members.length === 1 ? "This component includes itself" : `These components include each other (${members.join(", ")})`} through $ref, allOf, anyOf or oneOf with no object or array in between, which TypeScript cannot express; typed as unknown`,
 			);
 		}
 	}

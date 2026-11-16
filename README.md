@@ -187,6 +187,7 @@ The types equal openapi-typescript 7's default output, except where that output 
 - A `$ref` percent-encoded in the URI fragment (`#/components/schemas/A%7E1B` for `A/B`) is decoded before `~1` and `~0` (RFC 6901); openapi-typescript cannot resolve it.
 - `required` beside an `allOf` `$ref` makes a property required only when the type emitted for the target has it; openapi-typescript also does so when that type is nullable, a union without the property or a literal, and emits `WithRequired<T, "x">` that does not compile.
 - A schema with its own shape beside an `allOf` (or `anyOf`, `oneOf`) `$ref` back to itself is typed by that shape (`A = { x } & A` is `{ x }`); openapi-typescript's self-intersection does not compile.
+- Schemas that include each other through `allOf`, `anyOf` or `oneOf` (`A = { x } & B`, `B = { y } & A`) are `unknown` and an error (`inspex10`); openapi-typescript's output for them is circular (`TS2502`).
 - Names that are also `Object.prototype` members (`__proto__`, `constructor`) are ordinary names: a discriminator named `__proto__` is kept, and `required: ["constructor"]` does not invent a property.
 - A broken part of a spec (a `$ref` that does not resolve, a duplicate operationId) is `unknown` or left out, with an error; openapi-typescript rejects the whole document.
 

@@ -14,6 +14,9 @@
 				"type": "object",
 				"properties": { "child": { "$ref": "#/components/schemas/SelfDeep/properties/child" } }
 			},
+			"ViaAliasA": { "type": "object", "properties": { "x": { "type": "string" } }, "allOf": [{ "$ref": "#/components/schemas/ViaAlias" }] },
+			"ViaAlias": { "$ref": "#/components/schemas/ViaAliasB" },
+			"ViaAliasB": { "type": "object", "properties": { "y": { "type": "number" } }, "allOf": [{ "$ref": "#/components/schemas/ViaAliasA" }] },
 			"UsesA": { "type": "object", "required": ["a"], "properties": { "a": { "$ref": "#/components/schemas/A" } } }
 		},
 		"parameters": {

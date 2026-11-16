@@ -121,15 +121,34 @@ export const notJson: ours.components["schemas"]["Json"] = [1];
 export const usesA: Same<ours.components["schemas"]["UsesA"]["a"], unknown> = true;
 export const selfDeep: Same<ours.components["schemas"]["SelfDeep"], { child?: unknown }> = true;
 export const p1: Same<ours.components["parameters"]["P1"], unknown> = true;
-export const p2: Same<ours.components["parameters"]["P2"], unknown> = true;`,
+export const p2: Same<ours.components["parameters"]["P2"], unknown> = true;
+export const viaAlias: Same<ours.components["schemas"]["ViaAliasA"], unknown> = true;`,
 		problems: [
 			["#/components/schemas/A", RefCycle],
 			["#/components/schemas/B", RefCycle],
 			["#/components/schemas/C", RefCycle],
 			["#/components/schemas/SelfDeep/properties/child/$ref", RefCycle],
+			["#/components/schemas/ViaAliasA", RefCycle],
+			["#/components/schemas/ViaAlias", RefCycle],
+			["#/components/schemas/ViaAliasB", RefCycle],
 			["#/components/parameters/P1", RefCycle],
 			["#/components/parameters/P2", RefCycle],
 		],
+	},
+	"mutual-includes": {
+		why: "shaped schemas that include each other: upstream's `{ x } & B` and `{ y } & A` are circular (TS2502), and leaving the references out would lose required members, so inspex types them `unknown` and reports them",
+		upstream: ({ text }) => {
+			expect(text).toContain('AllA: { x: string; } & components["schemas"]["AllB"];');
+			expect(text).toContain('AnyA: { x?: string; } | components["schemas"]["AnyB"];');
+		},
+		upstreamCompiles: false,
+		ours: `
+type S = ours.components["schemas"];
+export const all: Same<S["AllA"] | S["AllB"] | S["AnyA"] | S["AnyB"] | S["OneA"] | S["OneB"], unknown> = true;`,
+		problems: ["AllA", "AllB", "AnyA", "AnyB", "OneA", "OneB"].map((name) => [
+			`#/components/schemas/${name}`,
+			RefCycle,
+		]),
 	},
 	"operation-id-collision": {
 		why: 'upstream replaces "#" with "/" in operationIds, so "a#b" and "a/b" become one key declared twice with different types; inspex keeps operationIds as they are',
