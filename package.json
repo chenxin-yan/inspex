@@ -1,6 +1,6 @@
 {
 	"name": "inspex",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "TypeScript content mappers: import a spec file and get its types, with no generation step",
 	"type": "module",
 	"sideEffects": false,
