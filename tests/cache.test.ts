@@ -1,6 +1,6 @@
 /**
- * The declarations cache across compiler runs, observed through its directory and a planted entry:
- * no timing involved.
+ * The declarations cache across compiler runs, observed through its directory, an entry's timestamp and
+ * an altered entry: no timing involved.
  *
  * @module-tag windows
  * @module-tag macos
@@ -11,7 +11,9 @@ import {
 	readdirSync,
 	readFileSync,
 	rmSync,
+	statSync,
 	symlinkSync,
+	utimesSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -54,7 +56,7 @@ beforeAll(() => {
 		join(project, "app.ts"),
 		`import type { components } from "./acme.openapi.jsonc";\nexport const id: components["schemas"]["Id"] = "1";\n`,
 	);
-	// Compiles only if the declarations come from the planted cache entry.
+	// Compiles only if the declarations came from an altered cache entry.
 	writeFileSync(
 		join(project, "probe.ts"),
 		`import type { cacheHit } from "./acme.openapi.jsonc";\nexport const hit: cacheHit = true;\n`,
@@ -63,30 +65,37 @@ beforeAll(() => {
 afterAll(() => rmSync(project, { recursive: true, force: true }));
 
 it(
-	"reuses an entry on the next run, regenerates after an edit, and ignores a corrupt entry",
+	"reuses an entry on the next run, regenerates after an edit, and ignores an altered or corrupt entry",
 	() => {
 		const first = tsc(project, ["-p", ".", "--runExternalCode"]);
 		expect(first.lines).toEqual([]);
 		const [entry] = entries();
 		expect(entries()).toHaveLength(1);
 
-		// A second run that reads the entry sees the planted export.
+		// A second run reuses the entry: it does not rewrite it, so its old timestamp stays.
 		const file = join(cache, entry as string);
+		const longAgo = new Date("2000-01-01T00:00:00Z");
+		utimesSync(file, longAgo, longAgo);
+		expect(tsc(project, ["-p", ".", "--runExternalCode"]).lines).toEqual([]);
+		expect(statSync(file).mtime).toEqual(longAgo);
+
+		// An entry whose declarations were altered, though it still parses, is regenerated.
 		const cached = JSON.parse(readFileSync(file, "utf8"));
 		writeFileSync(
 			file,
 			JSON.stringify({ ...cached, text: `${cached.text}export type cacheHit = true;\n` }),
 		);
-		expect(tsc(project, ["-p", "tsconfig.probe.json", "--runExternalCode"]).lines).toEqual([]);
+		expect(tsc(project, ["-p", "tsconfig.probe.json", "--runExternalCode"]).lines).toEqual([
+			`probe.ts(1,15): error TS2305: Module '"./acme.openapi.jsonc"' has no exported member 'cacheHit'.`,
+		]);
+		expect(readFileSync(file, "utf8")).not.toContain("cacheHit");
 
-		// Edited content has another key: generated again, without the planted export.
+		// Edited content has another key: generated again.
 		writeFileSync(
 			join(project, "acme.openapi.jsonc"),
 			spec(`"Id": { "type": "string" }, "Other": {}`),
 		);
-		expect(tsc(project, ["-p", "tsconfig.probe.json", "--runExternalCode"]).lines).toEqual([
-			`probe.ts(1,15): error TS2305: Module '"./acme.openapi.jsonc"' has no exported member 'cacheHit'.`,
-		]);
+		expect(tsc(project, ["-p", ".", "--runExternalCode"]).lines).toEqual([]);
 		const edited = entries().find((f) => f !== entry) as string;
 		expect(entries()).toHaveLength(2);
 
