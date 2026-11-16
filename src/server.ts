@@ -20,53 +20,93 @@ const mapper = new Mapper(
 		.digest("hex"),
 );
 
-function dispatch(method: string, params: unknown): unknown {
-	switch (method) {
-		case "initialize":
-			return mapper.initialize(params as InitializeParams);
-		case "openProject":
-			return mapper.openProject(params as OpenProjectParams);
-		case "transform":
-			return mapper.transform(params as TransformParams);
-		case "closeProject":
-			mapper.closeProject((params as CloseProjectParams).projectHandle);
-			return null;
-		default:
-			throw Object.assign(new Error(`Method not found: ${method}`), { code: -32_601 });
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	typeof value === "object" && value !== null && !Array.isArray(value);
+const isString = (value: unknown): value is string => typeof value === "string";
+
+/** Thrown for a request TypeScript should not have sent; answered with its JSON-RPC error code. */
+class RpcError extends Error {
+	readonly code: number;
+	constructor(code: number, message: string) {
+		super(message);
+		this.code = code;
 	}
 }
 
-process.stdin.on(
-	"data",
-	createMessageReader((body) => {
-		let request: { id?: string | number; method?: string; params?: unknown };
-		try {
-			request = JSON.parse(body);
-		} catch {
-			process.stdout.write(
-				encodeMessage({
-					jsonrpc: "2.0",
-					id: null,
-					error: { code: -32_700, message: "Parse error" },
-				}),
-			);
-			return;
-		}
-		const { id = null, method = "", params } = request;
-		try {
-			process.stdout.write(encodeMessage({ jsonrpc: "2.0", id, result: dispatch(method, params) }));
-		} catch (error) {
-			const code = (error as { code?: unknown }).code;
-			process.stdout.write(
-				encodeMessage({
-					jsonrpc: "2.0",
-					id,
-					error: {
-						code: typeof code === "number" ? code : -32_603,
-						message: error instanceof Error ? error.message : String(error),
-					},
-				}),
-			);
-		}
-	}),
-);
+const validParams: Record<string, (params: Record<string, unknown>) => boolean> = {
+	initialize: (p) => Array.isArray(p.positionEncodings),
+	openProject: (p) =>
+		isString(p.configFileName) &&
+		isString(p.projectHandle) &&
+		(p.options === undefined || isRecord(p.options)),
+	transform: (p) => isString(p.fileName) && isString(p.content) && isString(p.projectHandle),
+	closeProject: (p) => isString(p.projectHandle),
+};
+
+function dispatch(method: string, params: unknown): unknown {
+	const valid = validParams[method];
+	if (!Object.hasOwn(validParams, method) || !valid) {
+		throw new RpcError(-32_601, `Method not found: ${method}`);
+	}
+	if (!isRecord(params) || !valid(params)) {
+		throw new RpcError(-32_602, `Invalid params for ${method}`);
+	}
+	switch (method) {
+		case "initialize":
+			return mapper.initialize(params as unknown as InitializeParams);
+		case "openProject":
+			return mapper.openProject(params as unknown as OpenProjectParams);
+		case "transform":
+			return mapper.transform(params as unknown as TransformParams);
+		default:
+			mapper.closeProject((params as unknown as CloseProjectParams).projectHandle);
+			return null;
+	}
+}
+
+const reply = (message: Record<string, unknown>): boolean =>
+	process.stdout.write(encodeMessage({ jsonrpc: "2.0", ...message }));
+
+function handle(body: string): void {
+	let request: unknown;
+	try {
+		request = JSON.parse(body);
+	} catch {
+		reply({ id: null, error: { code: -32_700, message: "Parse error" } });
+		return;
+	}
+	const id =
+		isRecord(request) && (isString(request.id) || typeof request.id === "number")
+			? request.id
+			: null;
+	if (!isRecord(request) || id === null || !isString(request.method)) {
+		reply({ id, error: { code: -32_600, message: "Invalid request" } });
+		return;
+	}
+	try {
+		reply({ id, result: dispatch(request.method, request.params) });
+	} catch (error) {
+		reply({
+			id,
+			error: {
+				code: error instanceof RpcError ? error.code : -32_603,
+				message: error instanceof Error ? error.message : String(error),
+			},
+		});
+	}
+}
+
+const read = createMessageReader(handle);
+process.stdin.on("data", (chunk: Buffer) => {
+	try {
+		read(chunk);
+	} catch (error) {
+		// The stream cannot be resynchronized after a framing error. Stop reading, and let the pending
+		// replies flush before the process exits with an error (process.exit could cut them off).
+		process.stderr.write(
+			`inspex: malformed message from TypeScript: ${error instanceof Error ? error.message : String(error)}\n`,
+		);
+		process.exitCode = 1;
+		process.stdin.destroy();
+	}
+});
