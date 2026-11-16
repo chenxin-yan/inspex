@@ -62,13 +62,13 @@ export default defineConfig({
 		],
 	},
 	pack: {
+		// The package's only file is the content mapper process; there is nothing to import.
+		entry: ["src/server.ts"],
+		dts: false,
 		fixedExtension: false,
 		publint: "ci-only",
-		attw: {
-			enabled: "ci-only",
-			profile: "esm-only",
-			level: "error",
-		},
+		// Nothing is importable (the package is a program the compiler starts), so attw has no types to resolve.
+		attw: false,
 	},
 	test: {
 		// A file opts in with a `@module-tag` comment; CI runs the tagged files on that host.

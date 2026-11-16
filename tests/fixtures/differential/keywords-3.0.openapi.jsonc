@@ -1,0 +1,48 @@
+// Schema keywords specific to OpenAPI 3.0. Compared with openapi-typescript by tests/differential.test.ts.
+{
+	"openapi": "3.0.3",
+	"info": { "title": "keywords 3.0", "version": "1" },
+	"paths": {
+		"/things": {
+			"get": {
+				"operationId": "getThing",
+				"responses": {
+					"200": {
+						"description": "ok",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/Thing" } } }
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"Thing": {
+				"type": "object",
+				"required": ["name", "maybe"],
+				"properties": {
+					"name": { "type": "string", "nullable": true },
+					"maybe": { "type": "object", "nullable": true, "properties": { "a": { "type": "integer" } } },
+					"nullableEnum": { "type": "string", "enum": ["a", "b"], "nullable": true },
+					"nullableArray": { "type": "array", "items": { "type": "string" }, "nullable": true },
+					"nullableAllOf": { "allOf": [{ "$ref": "#/components/schemas/Base" }], "nullable": true },
+					"nullableNoType": { "nullable": true },
+					"refWithNullableSibling": { "$ref": "#/components/schemas/Base" },
+					"exclusive": { "type": "number", "minimum": 0, "exclusiveMinimum": true },
+					"tupleItems": { "type": "array", "items": { "type": "string" }, "minItems": 2, "maxItems": 2 },
+					"binary": { "type": "string", "format": "binary" },
+					"mapOfRefs": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/Base" } }
+				}
+			},
+			"Base": {
+				"type": "object",
+				"required": ["id"],
+				"properties": { "id": { "type": "string" }, "note": { "type": "string" } }
+			},
+			"Extended": {
+				"required": ["note"],
+				"allOf": [{ "$ref": "#/components/schemas/Base" }, { "type": "object", "properties": { "more": { "type": "boolean" } } }]
+			}
+		}
+	}
+}

@@ -1,0 +1,18 @@
+// No operation has an operationId. inspex emits `interface operations {}` where openapi-typescript emits
+// `Record<string, never>` (whose every member is `never`); tests/differential.test.ts states the difference.
+{
+	"openapi": "3.0.3",
+	"info": { "title": "no operationIds", "version": "1" },
+	"paths": {
+		"/health": {
+			"get": {
+				"responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Health" } } } } }
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"Health": { "type": "object", "required": ["ok"], "properties": { "ok": { "type": "boolean" } } }
+		}
+	}
+}
