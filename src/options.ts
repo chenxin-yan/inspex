@@ -11,6 +11,15 @@ export interface MapperOptions {
 
 const optionNames = ["register", "readWriteMarkers"];
 const identifier = /^[A-Za-z_$][\w$]*$/;
+// Names an interface cannot have (TS2427, or a syntax error), and strict-mode reserved words for safety.
+const reservedNames = new Set(
+	(
+		"break case catch class const continue debugger default delete do else enum export extends false " +
+		"finally for function if import in instanceof new null return super switch this throw true try " +
+		"typeof var void while with implements interface let package private protected public static yield " +
+		"await any unknown never object string number boolean symbol bigint undefined"
+	).split(" "),
+);
 
 export function parseOptions(value: unknown): {
 	options: MapperOptions;
@@ -47,13 +56,23 @@ export function parseOptions(value: unknown): {
 				if (key !== "module" && key !== "interface")
 					fail(["register", key], `Unknown property '${key}'. ${shape}`);
 			}
-			if (typeof register.module !== "string" || !register.module) {
+			// A module name to augment: not empty, no surrounding spaces, no control characters.
+			if (
+				typeof register.module !== "string" ||
+				!register.module ||
+				register.module.trim() !== register.module ||
+				/[\p{Cc}]/u.test(register.module)
+			) {
 				fail(
 					["register", ...("module" in register ? ["module"] : [])],
 					`'register.module' must be a module name. ${shape}`,
 				);
 			}
-			if (typeof register.interface !== "string" || !identifier.test(register.interface)) {
+			if (
+				typeof register.interface !== "string" ||
+				!identifier.test(register.interface) ||
+				reservedNames.has(register.interface)
+			) {
 				fail(
 					["register", ...("interface" in register ? ["interface"] : [])],
 					`'register.interface' must be an interface name (an identifier). ${shape}`,

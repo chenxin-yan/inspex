@@ -21,7 +21,7 @@ it("accepts register and readWriteMarkers", () => {
 	});
 });
 
-it.each([
+const malformed: [options: unknown, [path: string[], messageText: string]][] = [
 	[[], [[], "inspex options must be an object."]],
 	[
 		{ registr: {} },
@@ -53,6 +53,22 @@ it.each([
 			`'register.interface' must be an interface name (an identifier). 'register' must be { "module": "<package>", "interface": "<InterfaceName>" }.`,
 		],
 	],
+	...["class", "let", "any", "unknown", "undefined", "void"].map(
+		(name): (typeof malformed)[number] => [
+			{ register: { module: "m", interface: name } },
+			[
+				["register", "interface"],
+				`'register.interface' must be an interface name (an identifier). 'register' must be { "module": "<package>", "interface": "<InterfaceName>" }.`,
+			],
+		],
+	),
+	...["", " m", "m ", "a\nb"].map((name): (typeof malformed)[number] => [
+		{ register: { module: name, interface: "I" } },
+		[
+			["register", "module"],
+			`'register.module' must be a module name. 'register' must be { "module": "<package>", "interface": "<InterfaceName>" }.`,
+		],
+	]),
 	[
 		{ register: { module: "m", interface: "I", extra: 1 } },
 		[
@@ -60,9 +76,14 @@ it.each([
 			`Unknown property 'extra'. 'register' must be { "module": "<package>", "interface": "<InterfaceName>" }.`,
 		],
 	],
-])("reports %j at its path, and ignores the malformed option", (options, [path, messageText]) => {
-	const { options: parsed, diagnostics } = parseOptions(options);
-	expect(diagnostics).toEqual([{ path, messageText, code: 9 }]);
-	expect(parsed.register).toBeUndefined();
-	expect(parsed.readWriteMarkers).toBe(false);
-});
+];
+
+it.each(malformed)(
+	"reports %j at its path, and ignores the malformed option",
+	(options, [path, messageText]) => {
+		const { options: parsed, diagnostics } = parseOptions(options);
+		expect(diagnostics).toEqual([{ path, messageText, code: 9 }]);
+		expect(parsed.register).toBeUndefined();
+		expect(parsed.readWriteMarkers).toBe(false);
+	},
+);
