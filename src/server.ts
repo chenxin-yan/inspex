@@ -75,12 +75,12 @@ function handle(body: string): void {
 		reply({ id: null, error: { code: -32_700, message: "Parse error" } });
 		return;
 	}
-	const id =
-		isRecord(request) && (isString(request.id) || typeof request.id === "number")
-			? request.id
-			: null;
-	if (!isRecord(request) || id === null || !isString(request.method)) {
-		reply({ id, error: { code: -32_600, message: "Invalid request" } });
+	// JSON-RPC allows a null id. The `jsonrpc` member is not checked: inspex answers whatever the compiler
+	// sends, and refusing it would only make the mapper more fragile.
+	const id = isRecord(request) ? request.id : undefined;
+	const validId = isString(id) || typeof id === "number" || id === null;
+	if (!isRecord(request) || !validId || !isString(request.method)) {
+		reply({ id: validId ? id : null, error: { code: -32_600, message: "Invalid request" } });
 		return;
 	}
 	try {

@@ -9,6 +9,10 @@ it("defaults without options", () => {
 	});
 });
 
+it("accepts a Unicode identifier as register.interface", () => {
+	expect(parseOptions({ register: { module: "m", interface: "Δpecs" } }).diagnostics).toEqual([]);
+});
+
 it("accepts register and readWriteMarkers", () => {
 	expect(
 		parseOptions({

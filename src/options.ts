@@ -10,7 +10,7 @@ export interface MapperOptions {
 }
 
 const optionNames = ["register", "readWriteMarkers"];
-const identifier = /^[A-Za-z_$][\w$]*$/;
+const identifier = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200C\u200D]*$/u;
 // Names an interface cannot have (TS2427, or a syntax error), and strict-mode reserved words for safety.
 const reservedNames = new Set(
 	(

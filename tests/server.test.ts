@@ -58,6 +58,7 @@ it(
 			frame("not json"),
 			frame('{"jsonrpc":"2.0","id":4,"method":"nope","params":{}}'),
 			frame('{"jsonrpc":"2.0","id":5,"method":"closeProject","params":{"projectHandle":"p"}}'),
+			frame('{"jsonrpc":"2.0","id":null,"method":"closeProject","params":{"projectHandle":"p"}}'),
 		]);
 		expect(result.replies).toEqual([
 			{ jsonrpc: "2.0", id: 1, result: { positionEncoding: "utf-16", diagnosticSource: "inspex" } },
@@ -68,6 +69,8 @@ it(
 			{ jsonrpc: "2.0", id: null, error: { code: -32_700, message: "Parse error" } },
 			{ jsonrpc: "2.0", id: 4, error: { code: -32_601, message: "Method not found: nope" } },
 			{ jsonrpc: "2.0", id: 5, result: null },
+			// JSON-RPC allows a null id.
+			{ jsonrpc: "2.0", id: null, result: null },
 		]);
 		expect(result.status).toBe(0);
 	},
