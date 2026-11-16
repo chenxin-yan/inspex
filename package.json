@@ -58,7 +58,6 @@
 		"release:publish": "node ./scripts/release.mjs --publish-dir"
 	},
 	"devDependencies": {
-		"@arethetypeswrong/core": "^0.18.5",
 		"@changesets/changelog-github": "^1.0.1",
 		"@changesets/cli": "^3.0.3",
 		"@types/node": "^24.0.0",

@@ -67,8 +67,6 @@ export default defineConfig({
 		dts: false,
 		fixedExtension: false,
 		publint: "ci-only",
-		// Nothing is importable (the package is a program the compiler starts), so attw has no types to resolve.
-		attw: false,
 	},
 	test: {
 		// A file opts in with a `@module-tag` comment; CI runs the tagged files on that host.
