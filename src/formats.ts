@@ -53,6 +53,8 @@ function mapOpenApiJsonc(content: string, options: GenerateOptions): MappedSpec 
 			problems: [{ start: 0, length: 0, code: ProblemCode.InternalError, message }],
 		};
 	}
+	// Locating needs another pass over the whole text; most specs have nothing to locate.
+	if (!result.problems.length) return { text: result.text, problems: [] };
 	const ranges = locateJsonPointers(
 		content,
 		result.problems.map((p) => p.pointer),
