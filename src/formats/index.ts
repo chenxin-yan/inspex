@@ -1,7 +1,8 @@
 // Spec formats, chosen by the file name's suffix. Each one turns file content into declarations.
 
 import type { MappedSpec } from "../problems.ts";
-import { type GenerateOptions, mapOpenApiJsonc } from "./openapi/index.ts";
+import type { GenerateOptions } from "./openapi/context.ts";
+import { mapOpenApiJsonc } from "./openapi/index.ts";
 
 interface Format {
 	suffix: string;

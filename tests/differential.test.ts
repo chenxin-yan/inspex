@@ -27,7 +27,8 @@ import { basename, delimiter, join, relative } from "node:path";
 import openapiTS, { astToString } from "openapi-typescript";
 import { afterAll, expect, it } from "vite-plus/test";
 
-import { formatPointer, generateOpenApiTypes } from "../src/formats/openapi/index.ts";
+import { generateOpenApiTypes } from "../src/formats/openapi/index.ts";
+import { formatPointer } from "../src/formats/openapi/refs.ts";
 import { parseJsonc } from "../src/jsonc.ts";
 import { ProblemCode } from "../src/problems.ts";
 import { fixturesDir, tsc, tscTimeout } from "./helpers.ts";
